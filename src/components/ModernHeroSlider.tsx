@@ -39,7 +39,7 @@ const SLIDES: SlideItem[] = [
     title: 'Rewarding Exceptional Technical Talent',
     subtitle:
       'GSTC Garki outstanding student receiving an HP laptop prize and merit certificate at our annual science & tech honors convocation.',
-    highlight: 'Area 10, Garki • FCT Technology Honors'
+    highlight: 'Area 3 Garki • FCT Technology Honors'
   },
   {
     id: 2,
@@ -238,10 +238,6 @@ export const ModernHeroSlider: React.FC<ModernHeroSliderProps> = ({
           <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white font-serif">
             GSTC Garki School Management Portal
           </h3>
-          <p className="text-xs text-emerald-100/90 max-w-xl">
-            Sign in as Super Admin, Administrator, Staff (Teacher), or Student. 
-            Super Admin username: <span className="font-mono font-bold text-amber-300">Admin</span> | Password: <span className="font-mono font-bold text-amber-300">0000</span>
-          </p>
         </div>
 
         {/* Primary Action Buttons Just Below the Slides */}
@@ -255,23 +251,13 @@ export const ModernHeroSlider: React.FC<ModernHeroSliderProps> = ({
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
 
-          {onNavigateToCheckResult && (
-            <button
-              onClick={onNavigateToCheckResult}
-              className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm rounded-xl border border-white/20 backdrop-blur-xs transition flex items-center gap-2 shrink-0"
-            >
-              <GraduationCap className="w-4 h-4 text-emerald-300" />
-              <span>Check Student Result</span>
-            </button>
-          )}
-
           {onExplorePrograms && (
             <button
               onClick={onExplorePrograms}
-              className="px-4 py-3 text-emerald-200 hover:text-white font-semibold text-xs sm:text-sm transition hidden lg:inline-flex items-center gap-1.5"
+              className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm rounded-xl border border-white/20 backdrop-blur-xs transition inline-flex items-center gap-1.5"
             >
-              <BookOpen className="w-4 h-4" />
-              <span>Vocational Trades</span>
+              <BookOpen className="w-4 h-4 text-emerald-300" />
+              <span>9 Vocational Trades</span>
             </button>
           )}
         </div>

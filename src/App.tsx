@@ -78,19 +78,24 @@ function SchoolAppContent() {
     generateBatchScratchCards,
     updateWebsiteCustomization,
     postNews,
+    updateNews,
     deleteNews,
     addStaff,
     updateStaff,
     deleteStaff,
     addClass,
     updateClass,
+    deleteClass,
     addSubject,
+    updateSubject,
+    deleteSubject,
     assignAllSubjectsToAllClasses,
     assignSubjectToTeacher,
     deleteAssignment,
     updateSettings,
     updateNotice,
     enrollStudent,
+    updateStudent,
     deenrollStudent,
     saveStudentScore,
     activateScratchCardForStudent
@@ -110,8 +115,18 @@ function SchoolAppContent() {
 
   // Find current teacher or student record if available
   const loggedInTeacher = staff.find(
-    (s) => s.staffId === userProfile?.staffId || s.email === userProfile?.email
+    (s) =>
+      (userProfile?.uid && s.id === userProfile.uid) ||
+      (userProfile?.staffId && s.staffId?.toLowerCase() === userProfile.staffId.toLowerCase()) ||
+      (userProfile?.email && s.email?.toLowerCase() === userProfile.email.toLowerCase()) ||
+      (userProfile?.displayName && s.fullName?.toLowerCase() === userProfile.displayName.toLowerCase())
   );
+
+  const goToLoginPage = () => {
+    setAuthModalOpen(false);
+    setActiveTab('login');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="min-h-screen bg-[#f7f9f8] text-stone-800 flex flex-col font-sans selection:bg-[#0b4d2c] selection:text-white">
@@ -121,13 +136,22 @@ function SchoolAppContent() {
         setActiveTab={setActiveTab}
         syncStatus={syncStatus}
         lastSyncTime={lastSyncTime}
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={goToLoginPage}
         onOpenDeployGuide={() => setDeployModalOpen(true)}
         onOpenChangePassword={() => setChangePasswordModalOpen(true)}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Dedicated Login Page */}
+        {activeTab === 'login' && (
+          <AuthModal
+            isOpen={true}
+            asPage={true}
+            onClose={() => setActiveTab(currentRole ? getDefaultTab(currentRole) : 'home')}
+          />
+        )}
+
         {/* Modern School Homepage with 5s Sliding Pictures & Login Button */}
         {activeTab === 'home' && (
           <HomePage
@@ -136,14 +160,19 @@ function SchoolAppContent() {
             scratchCards={scratchCards}
             students={students}
             results={results}
-            onOpenLogin={() => setAuthModalOpen(true)}
+            onOpenLogin={goToLoginPage}
             onNavigateToCheckResult={() => {
               if (userProfile?.role === 'student') {
                 setActiveTab('student_dashboard');
-              } else {
+              } else if (userProfile) {
                 setActiveTab('results');
+              } else {
+                goToLoginPage();
               }
             }}
+            onPostNews={postNews}
+            onUpdateNews={updateNews}
+            canManageNews={currentRole === 'admin' || currentRole === 'super_admin'}
           />
         )}
 
@@ -153,6 +182,8 @@ function SchoolAppContent() {
             admins={admins}
             scratchCards={scratchCards}
             customization={customization}
+            syncStatus={syncStatus}
+            lastSyncTime={lastSyncTime}
             onAddAdmin={addAdmin}
             onRemoveAdmin={removeAdmin}
             onGenerateScratchCards={generateBatchScratchCards}
@@ -166,20 +197,31 @@ function SchoolAppContent() {
             classes={classes}
             subjects={subjects}
             staff={staff}
+            students={students}
             assignments={assignments}
             settings={settings}
             news={news}
             initialSubTab={activeTab === 'post_news' ? 'news' : 'teachers'}
             onAddStaff={addStaff}
+            onUpdateStaff={updateStaff}
             onDeleteStaff={deleteStaff}
             onAddClass={addClass}
+            onUpdateClass={updateClass}
+            onDeleteClass={deleteClass}
             onAddSubject={addSubject}
+            onUpdateSubject={updateSubject}
+            onDeleteSubject={deleteSubject}
+            onAddStudent={enrollStudent}
+            onUpdateStudent={updateStudent}
+            onDeleteStudent={deenrollStudent}
             onAssignAllSubjectsToAllClasses={assignAllSubjectsToAllClasses}
             onAssignSubjectToTeacher={assignSubjectToTeacher}
             onDeleteAssignment={deleteAssignment}
             onUpdateSettings={updateSettings}
             onPostNews={postNews}
+            onUpdateNews={updateNews}
             onDeleteNews={deleteNews}
+            onNavigateToPublicNews={() => setActiveTab('public_portal')}
           />
         )}
 
@@ -188,8 +230,17 @@ function SchoolAppContent() {
           <VisitorPortal
             customization={customization}
             news={news}
-            onNavigateToCheckResult={() => setActiveTab('student_dashboard')}
-            onOpenAuth={() => setAuthModalOpen(true)}
+            onNavigateToCheckResult={() => {
+              if (userProfile?.role === 'student') {
+                setActiveTab('student_dashboard');
+              } else {
+                goToLoginPage();
+              }
+            }}
+            onOpenAuth={goToLoginPage}
+            onPostNews={postNews}
+            onUpdateNews={updateNews}
+            canManageNews={currentRole === 'admin' || currentRole === 'super_admin'}
           />
         )}
 
@@ -204,6 +255,7 @@ function SchoolAppContent() {
             assignments={assignments}
             results={results}
             onEnrollStudent={enrollStudent}
+            onUpdateStudent={updateStudent}
             onDeenrollStudent={deenrollStudent}
             onSaveScore={saveStudentScore}
           />
@@ -270,7 +322,7 @@ function SchoolAppContent() {
             classes={classes}
             onAddStudent={enrollStudent}
             onDeleteStudent={deenrollStudent}
-            onUpdateStudent={async () => {}}
+            onUpdateStudent={updateStudent}
             showRegisterModalDefault={triggerStudentRegister}
           />
         )}
@@ -279,6 +331,7 @@ function SchoolAppContent() {
           <StaffTab
             staff={staff}
             onAddStaff={addStaff}
+            onUpdateStaff={updateStaff}
             onDeleteStaff={deleteStaff}
             showRegisterModalDefault={triggerStaffRegister}
           />
@@ -292,8 +345,14 @@ function SchoolAppContent() {
             staff={staff}
             assignments={assignments}
             onAddClass={addClass}
+            onUpdateClass={updateClass}
+            onDeleteClass={deleteClass}
             onAddSubject={addSubject}
-            onAddAssignment={async () => {}}
+            onUpdateSubject={updateSubject}
+            onDeleteSubject={deleteSubject}
+            onAddAssignment={async (a) => {
+              await assignSubjectToTeacher(a.teacherId, a.subjectId, a.classId, a.periodsPerWeek);
+            }}
             onDeleteAssignment={deleteAssignment}
           />
         )}
@@ -306,8 +365,14 @@ function SchoolAppContent() {
             staff={staff}
             assignments={assignments}
             onAddClass={addClass}
+            onUpdateClass={updateClass}
+            onDeleteClass={deleteClass}
             onAddSubject={addSubject}
-            onAddAssignment={async () => {}}
+            onUpdateSubject={updateSubject}
+            onDeleteSubject={deleteSubject}
+            onAddAssignment={async (a) => {
+              await assignSubjectToTeacher(a.teacherId, a.subjectId, a.classId, a.periodsPerWeek);
+            }}
             onDeleteAssignment={deleteAssignment}
           />
         )}
@@ -320,8 +385,14 @@ function SchoolAppContent() {
             staff={staff}
             assignments={assignments}
             onAddClass={addClass}
+            onUpdateClass={updateClass}
+            onDeleteClass={deleteClass}
             onAddSubject={addSubject}
-            onAddAssignment={async () => {}}
+            onUpdateSubject={updateSubject}
+            onDeleteSubject={deleteSubject}
+            onAddAssignment={async (a) => {
+              await assignSubjectToTeacher(a.teacherId, a.subjectId, a.classId, a.periodsPerWeek);
+            }}
             onDeleteAssignment={deleteAssignment}
           />
         )}
@@ -364,7 +435,7 @@ function SchoolAppContent() {
             <SchoolBadge size="xs" />
             <span className="font-semibold text-stone-700">GSTC Garki</span>
             <span>•</span>
-            <span>Government Science & Technical College, Area 10, Abuja</span>
+            <span>Government Science & Technical College, Area 3 Garki, Abuja</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-emerald-700 font-medium">

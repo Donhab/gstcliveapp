@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SchoolClass, Subject, TeachingAssignment, Staff } from '../types/school';
-import { GraduationCap, Plus, BookOpen, Layers, UserCheck } from 'lucide-react';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { GraduationCap, Plus, BookOpen, Layers, UserCheck, Edit2, Trash2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface ClassesAndSubjectsTabProps {
@@ -10,7 +11,11 @@ interface ClassesAndSubjectsTabProps {
   staff: Staff[];
   assignments: TeachingAssignment[];
   onAddClass: (c: Omit<SchoolClass, 'id'>) => Promise<void>;
+  onUpdateClass?: (id: string, updates: Partial<SchoolClass>) => Promise<void>;
+  onDeleteClass?: (id: string) => Promise<void>;
   onAddSubject: (s: Omit<Subject, 'id'>) => Promise<void>;
+  onUpdateSubject?: (id: string, updates: Partial<Subject>) => Promise<void>;
+  onDeleteSubject?: (id: string) => Promise<void>;
   onAddAssignment: (a: Omit<TeachingAssignment, 'id'>) => Promise<void>;
   onDeleteAssignment: (id: string) => Promise<void>;
 }
@@ -22,18 +27,29 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
   staff,
   assignments,
   onAddClass,
+  onUpdateClass,
+  onDeleteClass,
   onAddSubject,
+  onUpdateSubject,
+  onDeleteSubject,
   onAddAssignment,
   onDeleteAssignment
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<SchoolClass | null>(null);
+  const [classToDelete, setClassToDelete] = useState<SchoolClass | null>(null);
 
-  // New Class Form
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  const [subjectToDelete, setSubjectToDelete] = useState<Subject | null>(null);
+
+  const [assignmentToDelete, setAssignmentToDelete] = useState<TeachingAssignment | null>(null);
+
+  // Class Form
   const [className, setClassName] = useState('');
   const [classArm, setClassArm] = useState('Tech');
   const [formTeacher, setFormTeacher] = useState('');
 
-  // New Subject Form
+  // Subject Form
   const [subCode, setSubCode] = useState('');
   const [subName, setSubName] = useState('');
   const [subCategory, setSubCategory] = useState<Subject['category']>('Technical / Vocational');
@@ -44,28 +60,79 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
   const [assignClass, setAssignClass] = useState(classes[0]?.id || '');
   const [periods, setPeriods] = useState(4);
 
-  const handleCreateClass = async (e: React.FormEvent) => {
+  const openAddClassModal = () => {
+    setEditingClass(null);
+    setClassName('');
+    setClassArm('Tech');
+    setFormTeacher('');
+    setModalOpen(true);
+  };
+
+  const openEditClassModal = (cls: SchoolClass) => {
+    setEditingClass(cls);
+    setClassName(cls.name);
+    setClassArm(cls.arm);
+    setFormTeacher(cls.formTeacherName || '');
+    setModalOpen(true);
+  };
+
+  const handleSaveClass = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onAddClass({
-      name: className,
-      arm: classArm,
-      level: className,
-      formTeacherName: formTeacher || 'Unassigned'
-    });
+    if (editingClass && onUpdateClass) {
+      await onUpdateClass(editingClass.id, {
+        name: className,
+        arm: classArm,
+        level: className,
+        formTeacherName: formTeacher || 'Unassigned'
+      });
+    } else {
+      await onAddClass({
+        name: className,
+        arm: classArm,
+        level: className,
+        formTeacherName: formTeacher || 'Unassigned'
+      });
+    }
+    setEditingClass(null);
     setClassName('');
     setFormTeacher('');
     setModalOpen(false);
     confetti({ particleCount: 30 });
   };
 
-  const handleCreateSubject = async (e: React.FormEvent) => {
+  const openAddSubjectModal = () => {
+    setEditingSubject(null);
+    setSubCode('');
+    setSubName('');
+    setSubCategory('Technical / Vocational');
+    setModalOpen(true);
+  };
+
+  const openEditSubjectModal = (sub: Subject) => {
+    setEditingSubject(sub);
+    setSubCode(sub.code);
+    setSubName(sub.name);
+    setSubCategory(sub.category);
+    setModalOpen(true);
+  };
+
+  const handleSaveSubject = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onAddSubject({
-      code: subCode || `GSTC${Math.floor(100 + Math.random() * 900)}`,
-      name: subName,
-      category: subCategory,
-      classesOffered: ['CCS 1', 'Garment 1']
-    });
+    if (editingSubject && onUpdateSubject) {
+      await onUpdateSubject(editingSubject.id, {
+        code: subCode.toUpperCase(),
+        name: subName,
+        category: subCategory
+      });
+    } else {
+      await onAddSubject({
+        code: (subCode || `GSTC${Math.floor(100 + Math.random() * 900)}`).toUpperCase(),
+        name: subName,
+        category: subCategory,
+        classesOffered: classes.map((c) => c.name)
+      });
+    }
+    setEditingSubject(null);
     setSubCode('');
     setSubName('');
     setModalOpen(false);
@@ -97,10 +164,10 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
         <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-stone-200">
           <div>
             <h2 className="text-base font-bold text-stone-900">Registered Classes ({classes.length})</h2>
-            <p className="text-xs text-stone-500">Arms, levels and designated form masters</p>
+            <p className="text-xs text-stone-500">Add, edit, or remove academic classes, arms, and form masters</p>
           </div>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={openAddClassModal}
             className="px-3.5 py-2 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" /> Add Class
@@ -109,17 +176,41 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {classes.map((cls) => (
-            <div key={cls.id} className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs hover:shadow-md transition">
-              <div className="flex items-center justify-between mb-3">
-                <span className="w-9 h-9 rounded-lg bg-emerald-50 text-[#0b4d2c] flex items-center justify-center font-bold">
-                  <GraduationCap className="w-5 h-5" />
-                </span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-stone-100 text-stone-600 rounded">
-                  {cls.arm}
-                </span>
+            <div key={cls.id} className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs hover:shadow-md transition flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="w-9 h-9 rounded-lg bg-emerald-50 text-[#0b4d2c] flex items-center justify-center font-bold">
+                    <GraduationCap className="w-5 h-5" />
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 text-[10px] font-bold bg-stone-100 text-stone-600 rounded">
+                      {cls.arm}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEditClassModal(cls)}
+                      className="p-1 text-stone-400 hover:text-[#0b4d2c] transition cursor-pointer"
+                      title="Edit class"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    {onDeleteClass && (
+                      <button
+                        type="button"
+                        onClick={() => setClassToDelete(cls)}
+                        className="p-1 text-stone-400 hover:text-red-600 transition cursor-pointer"
+                        title="Delete class"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <h3 className="text-base font-bold text-stone-900">{cls.name}</h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  Form Teacher: <strong className="text-stone-700">{cls.formTeacherName || 'Unassigned'}</strong>
+                </p>
               </div>
-              <h3 className="text-base font-bold text-stone-900">{cls.name}</h3>
-              <p className="text-xs text-stone-500 mt-1">Form Teacher: <strong className="text-stone-700">{cls.formTeacherName}</strong></p>
             </div>
           ))}
         </div>
@@ -127,8 +218,10 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
         {modalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
-              <h3 className="font-bold text-base text-stone-900 mb-3">Add New Class</h3>
-              <form onSubmit={handleCreateClass} className="space-y-3">
+              <h3 className="font-bold text-base text-stone-900 mb-3">
+                {editingClass ? 'Edit Class' : 'Add New Class'}
+              </h3>
+              <form onSubmit={handleSaveClass} className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">Class Name</label>
                   <input
@@ -161,13 +254,42 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button type="button" onClick={() => setModalOpen(false)} className="px-3 py-1.5 text-xs text-stone-600">Cancel</button>
-                  <button type="submit" className="px-4 py-1.5 bg-[#0b4d2c] text-white text-xs font-bold rounded-lg">Save Class</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalOpen(false);
+                      setEditingClass(null);
+                    }}
+                    className="px-3 py-1.5 text-xs text-stone-600"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-1.5 bg-[#0b4d2c] text-white text-xs font-bold rounded-lg">
+                    {editingClass ? 'Update Class' : 'Save Class'}
+                  </button>
                 </div>
               </form>
             </div>
           </div>
         )}
+
+        <ConfirmDeleteModal
+          isOpen={Boolean(classToDelete)}
+          title="Remove Class"
+          message={
+            classToDelete
+              ? `Are you sure you want to permanently remove class "${classToDelete.name}" (${classToDelete.arm})?`
+              : ''
+          }
+          confirmLabel="Yes, Remove Class"
+          onConfirm={async () => {
+            if (classToDelete && onDeleteClass) {
+              await onDeleteClass(classToDelete.id);
+              setClassToDelete(null);
+            }
+          }}
+          onCancel={() => setClassToDelete(null)}
+        />
       </div>
     );
   }
@@ -178,10 +300,10 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
         <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-stone-200">
           <div>
             <h2 className="text-base font-bold text-stone-900">Curriculum Subjects ({subjects.length})</h2>
-            <p className="text-xs text-stone-500">Core academic, vocational, and technical subjects</p>
+            <p className="text-xs text-stone-500">Add, edit, or remove academic, vocational, and technical subjects</p>
           </div>
           <button
-            onClick={() => setModalOpen(true)}
+            onClick={openAddSubjectModal}
             className="px-3.5 py-2 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" /> Add Subject
@@ -195,9 +317,29 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
                 <span className="text-xs font-mono font-bold text-[#0b4d2c] bg-emerald-50 px-2 py-0.5 rounded">
                   {sub.code}
                 </span>
-                <span className="text-[10px] text-stone-500 bg-stone-100 px-2 py-0.5 rounded">
-                  {sub.category}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-stone-500 bg-stone-100 px-2 py-0.5 rounded">
+                    {sub.category}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => openEditSubjectModal(sub)}
+                    className="p-1 text-stone-400 hover:text-[#0b4d2c] transition cursor-pointer"
+                    title="Edit subject"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  {onDeleteSubject && (
+                    <button
+                      type="button"
+                      onClick={() => setSubjectToDelete(sub)}
+                      className="p-1 text-stone-400 hover:text-red-600 transition cursor-pointer"
+                      title="Delete subject"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               <h3 className="text-sm font-bold text-stone-900 mt-2">{sub.name}</h3>
               <p className="text-xs text-stone-400 mt-1">
@@ -210,8 +352,10 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
         {modalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
-              <h3 className="font-bold text-base text-stone-900 mb-3">Add Subject</h3>
-              <form onSubmit={handleCreateSubject} className="space-y-3">
+              <h3 className="font-bold text-base text-stone-900 mb-3">
+                {editingSubject ? 'Edit Subject' : 'Add Subject'}
+              </h3>
+              <form onSubmit={handleSaveSubject} className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">Subject Code</label>
                   <input
@@ -247,13 +391,42 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
                   </select>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button type="button" onClick={() => setModalOpen(false)} className="px-3 py-1.5 text-xs text-stone-600">Cancel</button>
-                  <button type="submit" className="px-4 py-1.5 bg-[#0b4d2c] text-white text-xs font-bold rounded-lg">Save Subject</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalOpen(false);
+                      setEditingSubject(null);
+                    }}
+                    className="px-3 py-1.5 text-xs text-stone-600"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-1.5 bg-[#0b4d2c] text-white text-xs font-bold rounded-lg">
+                    {editingSubject ? 'Update Subject' : 'Save Subject'}
+                  </button>
                 </div>
               </form>
             </div>
           </div>
         )}
+
+        <ConfirmDeleteModal
+          isOpen={Boolean(subjectToDelete)}
+          title="Remove Subject"
+          message={
+            subjectToDelete
+              ? `Are you sure you want to permanently remove subject "${subjectToDelete.name}" (${subjectToDelete.code})?`
+              : ''
+          }
+          confirmLabel="Yes, Remove Subject"
+          onConfirm={async () => {
+            if (subjectToDelete && onDeleteSubject) {
+              await onDeleteSubject(subjectToDelete.id);
+              setSubjectToDelete(null);
+            }
+          }}
+          onCancel={() => setSubjectToDelete(null)}
+        />
       </div>
     );
   }
@@ -296,8 +469,9 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
                 <td className="py-3 px-4">{asg.periodsPerWeek} Periods</td>
                 <td className="py-3 px-4 text-right">
                   <button
-                    onClick={() => onDeleteAssignment(asg.id)}
-                    className="text-stone-400 hover:text-red-600 p-1"
+                    type="button"
+                    onClick={() => setAssignmentToDelete(asg)}
+                    className="text-stone-400 hover:text-red-600 p-1 cursor-pointer"
                   >
                     Remove
                   </button>
@@ -368,6 +542,24 @@ export const ClassesAndSubjectsTab: React.FC<ClassesAndSubjectsTabProps> = ({
           </div>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        isOpen={Boolean(assignmentToDelete)}
+        title="Remove Teaching Assignment"
+        message={
+          assignmentToDelete
+            ? `Are you sure you want to remove "${assignmentToDelete.subjectName}" (${assignmentToDelete.className}) assigned to ${assignmentToDelete.teacherName}?`
+            : ''
+        }
+        confirmLabel="Yes, Remove Assignment"
+        onConfirm={async () => {
+          if (assignmentToDelete) {
+            await onDeleteAssignment(assignmentToDelete.id);
+            setAssignmentToDelete(null);
+          }
+        }}
+        onCancel={() => setAssignmentToDelete(null)}
+      />
     </div>
   );
 };

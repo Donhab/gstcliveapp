@@ -6,7 +6,8 @@ export interface AdminAccount {
   fullName: string;
   email: string;
   password: string; // stored for Super Admin management as requested
-  role: 'admin';
+  role: 'admin' | 'super_admin';
+  isPrincipalSuperAdmin?: boolean;
   assignedOffice?: string;
   createdAt: number;
 }
@@ -14,6 +15,7 @@ export interface AdminAccount {
 export interface Student {
   id: string;
   admissionNo: string; // e.g. "GSTC/2026/014"
+  password?: string; // Student portal login password (default: "0000")
   firstName: string;
   lastName: string;
   gender: 'Male' | 'Female';
@@ -34,6 +36,7 @@ export interface Student {
 export interface Staff {
   id: string;
   staffId: string; // e.g. "GSTC/STF/008"
+  password?: string; // Teacher/Staff portal login password (default: "0000")
   fullName: string;
   email: string;
   phone: string;
@@ -136,6 +139,15 @@ export interface Notice {
   actionText?: string;
 }
 
+export interface SchoolNewsMediaItem {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  caption?: string;
+  mimeType?: string;
+  chunkedMediaId?: string;
+}
+
 export interface SchoolNews {
   id: string;
   title: string;
@@ -146,6 +158,9 @@ export interface SchoolNews {
   authorRole: string;
   publishedAt: number;
   imageUrl?: string;
+  videoUrl?: string;
+  videoChunkedId?: string;
+  mediaItems?: SchoolNewsMediaItem[];
   pinned?: boolean;
 }
 

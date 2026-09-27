@@ -21,13 +21,17 @@ export const AdminsAndSettings: React.FC<AdminsAndSettingsProps> = ({
   const [saved, setSaved] = useState(false);
 
   const adminsList = [
-    {
-      name: 'Principal Admin (GSTC)',
-      email: 'principal@gstcgarki.edu.ng',
-      role: 'Super Admin',
-      status: 'Online Active',
-      avatar: 'PA'
-    },
+    ...(userProfile?.isPrincipalSuperAdmin
+      ? [
+          {
+            name: 'Principal Admin (GSTC)',
+            email: 'principal@gstcgarki.edu.ng',
+            role: 'Super Admin',
+            status: 'Online Active',
+            avatar: 'PA'
+          }
+        ]
+      : []),
     {
       name: 'Examination Officer',
       email: 'exam.officer@gstcgarki.edu.ng',
@@ -62,7 +66,7 @@ export const AdminsAndSettings: React.FC<AdminsAndSettingsProps> = ({
             </p>
           </div>
           <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-md border border-emerald-200">
-            Active Session: {userProfile?.role || 'Principal Admin (GSTC)'}
+            Active Session: {userProfile?.role || 'Administrator'}
           </span>
         </div>
 
@@ -96,32 +100,34 @@ export const AdminsAndSettings: React.FC<AdminsAndSettingsProps> = ({
       <div className="bg-white p-4 rounded-xl border border-stone-200">
         <h2 className="text-base font-bold text-stone-900">School & System Configuration</h2>
         <p className="text-xs text-stone-500">
-          Global academic session settings, term parameters, and Cloud Firestore sync status
+          Global academic session settings and term parameters
         </p>
       </div>
 
-      {/* Cloud Firestore Status card */}
-      <div className="bg-white p-5 rounded-xl border border-stone-200 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Database className="w-5 h-5 text-emerald-700" />
-            <div>
-              <h3 className="text-xs font-bold text-stone-900">Cloud Firestore Real-Time Engine</h3>
-              <p className="text-[11px] text-stone-500">
-                Live document listener connection status
-              </p>
+      {/* Cloud Firestore Status card - Restricted to Super Admin only */}
+      {userProfile?.role === 'super_admin' && (
+        <div className="bg-white p-5 rounded-xl border border-stone-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Database className="w-5 h-5 text-emerald-700" />
+              <div>
+                <h3 className="text-xs font-bold text-stone-900">Cloud Firestore Real-Time Engine</h3>
+                <p className="text-[11px] text-stone-500">
+                  Live document listener connection status
+                </p>
+              </div>
             </div>
+            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Connected Live
+            </span>
           </div>
-          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Connected Live
-          </span>
+          <div className="text-xs text-stone-600 pt-2 border-t border-stone-100 flex justify-between">
+            <span>Last live snapshot sync:</span>
+            <span className="font-mono text-stone-800">{lastSyncTime.toLocaleTimeString()}</span>
+          </div>
         </div>
-        <div className="text-xs text-stone-600 pt-2 border-t border-stone-100 flex justify-between">
-          <span>Last live snapshot sync:</span>
-          <span className="font-mono text-stone-800">{lastSyncTime.toLocaleTimeString()}</span>
-        </div>
-      </div>
+      )}
 
       {/* General Settings Form */}
       <form onSubmit={handleSaveSettings} className="bg-white p-5 rounded-xl border border-stone-200 space-y-4">

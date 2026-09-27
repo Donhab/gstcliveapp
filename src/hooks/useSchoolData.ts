@@ -72,7 +72,14 @@ export function useSchoolData() {
       collection(db, 'students'),
       (snap) => {
         const list: Student[] = [];
-        snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Student));
+        snap.forEach((d) => {
+          const data = d.data() as Student;
+          list.push({
+            ...data,
+            id: d.id,
+            password: data.password || '0000'
+          });
+        });
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setStudents(list);
         setSyncStatus('connected');
@@ -86,7 +93,14 @@ export function useSchoolData() {
       collection(db, 'staff'),
       (snap) => {
         const list: Staff[] = [];
-        snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Staff));
+        snap.forEach((d) => {
+          const data = d.data() as Staff;
+          list.push({
+            ...data,
+            id: d.id,
+            password: data.password || '0000'
+          });
+        });
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         setStaff(list);
         setSyncStatus('connected');
@@ -166,22 +180,82 @@ export function useSchoolData() {
       doc(db, 'settings', 'global_config'),
       (snap) => {
         if (snap.exists()) {
-          setSettings(snap.data() as SchoolSettings);
+          const data = snap.data() as SchoolSettings;
+          setSettings({
+            ...data,
+            address: data.address
+              ? data.address.replace(/Area\s*10,?\s*/gi, 'Area 3 ')
+              : 'Garki Area 3, Abuja FCT, Nigeria'
+          });
         }
       },
       (err) => console.error('Settings sync error:', err)
     );
 
-    // 10. News & Announcements listener (for visitors & public)
+    // 10. News & Announcements listener (for visitors & public) + Chunked Media reassembly
+    let rawNewsList: SchoolNews[] = [];
+    const mediaChunksMap = new Map<string, { index: number; data: string }[]>();
+
+    const resolveNewsWithMedia = () => {
+      const resolved = rawNewsList.map((item) => {
+        let resolvedVideoUrl = item.videoUrl;
+        if (resolvedVideoUrl && resolvedVideoUrl.startsWith('__CHUNKED_MEDIA__:')) {
+          const mediaId = resolvedVideoUrl.replace('__CHUNKED_MEDIA__:', '');
+          const chunks = mediaChunksMap.get(mediaId);
+          if (chunks && chunks.length > 0) {
+            const sorted = [...chunks].sort((a, b) => a.index - b.index);
+            resolvedVideoUrl = sorted.map((c) => c.data).join('');
+          }
+        }
+        const resolvedMediaItems = item.mediaItems?.map((m) => {
+          if (m.url && m.url.startsWith('__CHUNKED_MEDIA__:')) {
+            const mediaId = m.url.replace('__CHUNKED_MEDIA__:', '');
+            const chunks = mediaChunksMap.get(mediaId);
+            if (chunks && chunks.length > 0) {
+              const sorted = [...chunks].sort((a, b) => a.index - b.index);
+              return { ...m, url: sorted.map((c) => c.data).join('') };
+            }
+          }
+          return m;
+        });
+        return {
+          ...item,
+          videoUrl: resolvedVideoUrl,
+          mediaItems: resolvedMediaItems
+        };
+      });
+      resolved.sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0));
+      setNews(resolved);
+    };
+
     const unsubNews = onSnapshot(
       collection(db, 'school_news'),
       (snap) => {
         const list: SchoolNews[] = [];
         snap.forEach((d) => list.push({ ...d.data(), id: d.id } as SchoolNews));
-        list.sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0));
-        setNews(list);
+        rawNewsList = list;
+        resolveNewsWithMedia();
       },
       (err) => console.error('News sync error:', err)
+    );
+
+    const unsubNewsMedia = onSnapshot(
+      collection(db, 'school_news_media'),
+      (snap) => {
+        mediaChunksMap.clear();
+        snap.forEach((d) => {
+          const data = d.data() as { mediaId: string; chunkIndex: number; data: string };
+          if (data.mediaId && typeof data.data === 'string') {
+            const arr = mediaChunksMap.get(data.mediaId) || [];
+            arr.push({ index: data.chunkIndex || 0, data: data.data });
+            mediaChunksMap.set(data.mediaId, arr);
+          }
+        });
+        if (rawNewsList.length > 0) {
+          resolveNewsWithMedia();
+        }
+      },
+      (err) => console.error('News media sync error:', err)
     );
 
     // 11. Website Customization listener (Super Admin controls website changes)
@@ -189,20 +263,30 @@ export function useSchoolData() {
       doc(db, 'website_customization', 'main'),
       (snap) => {
         if (snap.exists()) {
-          setCustomization(snap.data() as WebsiteCustomization);
+          const data = snap.data() as WebsiteCustomization;
+          setCustomization({
+            ...data,
+            schoolAddress: data.schoolAddress
+              ? data.schoolAddress.replace(/Area\s*10,?\s*/gi, 'Area 3 ')
+              : 'Garki Area 3, Abuja Federal Capital Territory, Nigeria',
+            principalWelcomeMessage: data.principalWelcomeMessage
+              ? data.principalWelcomeMessage.replace(/Area\s*10,?\s*/gi, 'Area 3 ')
+              : 'Welcome to Government Science & Technical College Garki, Area 3 Abuja. Together with our wonderful team of high-performing administrative and academic staff, we are committed to practical excellence, technological innovation, and self-reliance across all 9 NABTEB-accredited trades.'
+          });
         } else {
           setCustomization({
             heroTagline: 'Empowering Future Innovators & Technical Leaders',
             heroAnnouncement: 'Admissions for 2026/2027 Academic Session are now open.',
-            principalWelcomeMessage: 'Welcome to Government Science & Technical College Garki.',
+            principalWelcomeMessage:
+              'Welcome to Government Science & Technical College Garki, Area 3 Abuja. Together with our wonderful team of high-performing administrative and academic staff, we are committed to practical excellence, technological innovation, and self-reliance across all 9 NABTEB-accredited trades.',
             schoolContactEmail: 'info@gstcgarki.edu.ng',
             schoolPhone: '+234 9 291 0000',
-            schoolAddress: 'Area 10, Garki, Abuja FCT, Nigeria',
+            schoolAddress: 'Garki Area 3, Abuja FCT, Nigeria',
             bannerNoticeText: 'Academic Session 2025/2026 First Term ongoing.',
             bannerNoticeActive: true,
             primaryAccentColor: '#0b4d2c',
             updatedAt: Date.now(),
-            updatedBy: 'Principal Super Admin'
+            updatedBy: 'Super Admin'
           });
         }
         setLoading(false);
@@ -225,6 +309,7 @@ export function useSchoolData() {
       unsubNotice();
       unsubSettings();
       unsubNews();
+      unsubNewsMedia();
       unsubCustom();
     };
   }, []);
@@ -237,11 +322,13 @@ export function useSchoolData() {
       id: newDocRef.id,
       createdAt: Date.now()
     };
+    setAdmins((prev) => [newAdmin, ...prev.filter((a) => a.id !== newAdmin.id)]);
     await setDoc(newDocRef, newAdmin);
     return newAdmin;
   };
 
   const removeAdmin = async (adminId: string) => {
+    setAdmins((prev) => prev.filter((a) => a.id !== adminId));
     await deleteDoc(doc(db, 'admins', adminId));
   };
 
@@ -251,7 +338,7 @@ export function useSchoolData() {
       {
         ...updates,
         updatedAt: Date.now(),
-        updatedBy: 'Principal Super Admin'
+        updatedBy: 'Super Admin'
       },
       { merge: true }
     );
@@ -283,19 +370,101 @@ export function useSchoolData() {
     return batchList;
   };
 
+  // Helper to store large data URLs (>350KB) in chunks in school_news_media
+  const persistMediaStringIfLarge = async (rawStr: string | undefined, newsId: string, prefix: string): Promise<string | undefined> => {
+    if (!rawStr) return rawStr;
+    const CHUNK_SIZE = 350000;
+    if (rawStr.length <= CHUNK_SIZE) {
+      return rawStr;
+    }
+    const mediaId = `${newsId}_${prefix}_${Date.now()}`;
+    const totalChunks = Math.ceil(rawStr.length / CHUNK_SIZE);
+    for (let i = 0; i < totalChunks; i++) {
+      const slice = rawStr.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      await setDoc(doc(db, 'school_news_media', `${mediaId}_${i}`), {
+        mediaId,
+        newsId,
+        chunkIndex: i,
+        totalChunks,
+        data: slice,
+        createdAt: Date.now()
+      });
+    }
+    return `__CHUNKED_MEDIA__:${mediaId}`;
+  };
+
   // --- Admin Actions ---
   const postNews = async (newsData: Omit<SchoolNews, 'id' | 'publishedAt'>) => {
     const newDocRef = doc(collection(db, 'school_news'));
-    const newsItem: SchoolNews = {
+    const fullNewsItem: SchoolNews = {
       ...newsData,
       id: newDocRef.id,
       publishedAt: Date.now()
     };
-    await setDoc(newDocRef, newsItem);
-    return newsItem;
+
+    // Optimistically update local state with full media immediately
+    setNews((prev) => [fullNewsItem, ...prev.filter((n) => n.id !== fullNewsItem.id)]);
+
+    // Prepare Firestore-safe payload (chunking any oversized video/media items)
+    const firestoreVideoUrl = await persistMediaStringIfLarge(
+      newsData.videoUrl,
+      newDocRef.id,
+      'vid'
+    );
+    const firestoreMediaItems = newsData.mediaItems
+      ? await Promise.all(
+          newsData.mediaItems.map(async (m, idx) => {
+            const safeUrl = await persistMediaStringIfLarge(m.url, newDocRef.id, `m${idx}`);
+            return { ...m, url: safeUrl || m.url };
+          })
+        )
+      : undefined;
+
+    const firestorePayload: Record<string, any> = {
+      ...fullNewsItem
+    };
+    if (firestoreVideoUrl !== undefined) {
+      firestorePayload.videoUrl = firestoreVideoUrl;
+    }
+    if (firestoreMediaItems !== undefined) {
+      firestorePayload.mediaItems = firestoreMediaItems;
+    }
+    Object.keys(firestorePayload).forEach((k) => {
+      if (firestorePayload[k] === undefined) {
+        delete firestorePayload[k];
+      }
+    });
+
+    await setDoc(newDocRef, firestorePayload);
+    return fullNewsItem;
+  };
+
+  const updateNews = async (id: string, updates: Partial<SchoolNews>) => {
+    setNews((prev) => prev.map((n) => (n.id === id ? { ...n, ...updates } : n)));
+
+    const firestoreUpdates: Record<string, any> = { ...updates };
+    if (updates.videoUrl !== undefined) {
+      firestoreUpdates.videoUrl = await persistMediaStringIfLarge(updates.videoUrl, id, 'vid');
+    }
+    if (updates.mediaItems !== undefined) {
+      firestoreUpdates.mediaItems = await Promise.all(
+        updates.mediaItems.map(async (m, idx) => {
+          const safeUrl = await persistMediaStringIfLarge(m.url, id, `m${idx}`);
+          return { ...m, url: safeUrl || m.url };
+        })
+      );
+    }
+    Object.keys(firestoreUpdates).forEach((k) => {
+      if (firestoreUpdates[k] === undefined) {
+        delete firestoreUpdates[k];
+      }
+    });
+
+    await updateDoc(doc(db, 'school_news', id), firestoreUpdates);
   };
 
   const deleteNews = async (id: string) => {
+    setNews((prev) => prev.filter((n) => n.id !== id));
     await deleteDoc(doc(db, 'school_news', id));
   };
 
@@ -303,10 +472,12 @@ export function useSchoolData() {
     const newDocRef = doc(collection(db, 'staff'));
     const newStaff: Staff = {
       ...staffData,
+      password: staffData.password || '0000',
       id: newDocRef.id,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
+    setStaff((prev) => [newStaff, ...prev.filter((s) => s.id !== newStaff.id)]);
     await setDoc(newDocRef, newStaff);
 
     if (staffData.isFormTeacher && staffData.formTeacherClassId) {
@@ -319,6 +490,7 @@ export function useSchoolData() {
   };
 
   const updateStaff = async (id: string, updates: Partial<Staff>) => {
+    setStaff((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates, updatedAt: Date.now() } : s)));
     await updateDoc(doc(db, 'staff', id), {
       ...updates,
       updatedAt: Date.now()
@@ -332,21 +504,75 @@ export function useSchoolData() {
   };
 
   const deleteStaff = async (id: string) => {
+    setStaff((prev) => prev.filter((s) => s.id !== id));
     await deleteDoc(doc(db, 'staff', id));
   };
 
   const addClass = async (classData: Omit<SchoolClass, 'id'>) => {
     const newDocRef = doc(collection(db, 'classes'));
-    await setDoc(newDocRef, { ...classData, id: newDocRef.id });
+    const matchedTeacher = staff.find(
+      (s) =>
+        s.id === classData.formTeacherId ||
+        s.fullName.toLowerCase() === (classData.formTeacherName || '').trim().toLowerCase()
+    );
+    const payload: SchoolClass = {
+      ...classData,
+      id: newDocRef.id,
+      formTeacherId: matchedTeacher?.id || classData.formTeacherId,
+      formTeacherName: matchedTeacher?.fullName || classData.formTeacherName
+    };
+    await setDoc(newDocRef, payload);
+    if (matchedTeacher) {
+      await updateDoc(doc(db, 'staff', matchedTeacher.id), {
+        isFormTeacher: true,
+        formTeacherClassId: newDocRef.id,
+        formTeacherClassName: classData.name
+      });
+    }
   };
 
   const updateClass = async (id: string, updates: Partial<SchoolClass>) => {
-    await updateDoc(doc(db, 'classes', id), updates);
+    const matchedTeacher = staff.find(
+      (s) =>
+        (updates.formTeacherId && s.id === updates.formTeacherId) ||
+        (updates.formTeacherName &&
+          s.fullName.toLowerCase() === updates.formTeacherName.trim().toLowerCase())
+    );
+    const enrichedUpdates: Partial<SchoolClass> = {
+      ...updates,
+      ...(matchedTeacher
+        ? { formTeacherId: matchedTeacher.id, formTeacherName: matchedTeacher.fullName }
+        : {})
+    };
+    setClasses((prev) => prev.map((c) => (c.id === id ? { ...c, ...enrichedUpdates } : c)));
+    await updateDoc(doc(db, 'classes', id), enrichedUpdates);
+    if (matchedTeacher) {
+      await updateDoc(doc(db, 'staff', matchedTeacher.id), {
+        isFormTeacher: true,
+        formTeacherClassId: id,
+        formTeacherClassName: updates.name || classes.find((c) => c.id === id)?.name || ''
+      });
+    }
+  };
+
+  const deleteClass = async (id: string) => {
+    setClasses((prev) => prev.filter((c) => c.id !== id));
+    await deleteDoc(doc(db, 'classes', id));
   };
 
   const addSubject = async (subjectData: Omit<Subject, 'id'>) => {
     const newDocRef = doc(collection(db, 'subjects'));
     await setDoc(newDocRef, { ...subjectData, id: newDocRef.id });
+  };
+
+  const updateSubject = async (id: string, updates: Partial<Subject>) => {
+    setSubjects((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+    await updateDoc(doc(db, 'subjects', id), updates);
+  };
+
+  const deleteSubject = async (id: string) => {
+    setSubjects((prev) => prev.filter((s) => s.id !== id));
+    await deleteDoc(doc(db, 'subjects', id));
   };
 
   const assignAllSubjectsToAllClasses = async () => {
@@ -408,6 +634,7 @@ export function useSchoolData() {
   };
 
   const deleteAssignment = async (id: string) => {
+    setAssignments((prev) => prev.filter((a) => a.id !== id));
     await deleteDoc(doc(db, 'assignments', id));
   };
 
@@ -424,15 +651,28 @@ export function useSchoolData() {
     const newDocRef = doc(collection(db, 'students'));
     const student: Student = {
       ...studentData,
+      password: studentData.password || '0000',
       id: newDocRef.id,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
+    setStudents((prev) => [student, ...prev.filter((s) => s.id !== student.id)]);
     await setDoc(newDocRef, student);
     return student;
   };
 
+  const updateStudent = async (studentId: string, updates: Partial<Student>) => {
+    setStudents((prev) =>
+      prev.map((s) => (s.id === studentId ? { ...s, ...updates, updatedAt: Date.now() } : s))
+    );
+    await updateDoc(doc(db, 'students', studentId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+  };
+
   const deenrollStudent = async (studentId: string) => {
+    setStudents((prev) => prev.filter((s) => s.id !== studentId));
     await deleteDoc(doc(db, 'students', studentId));
   };
 
@@ -550,9 +790,38 @@ export function useSchoolData() {
     }
 
     const newUsage = card.usageCount + 1;
+    const newStatus = newUsage >= card.maxUsage ? 'Used' : 'Active';
+
+    setScratchCards((prev) =>
+      prev.map((c) =>
+        c.id === card.id
+          ? {
+              ...c,
+              usageCount: newUsage,
+              status: newStatus,
+              usedByStudentId: student.id,
+              usedByStudentName: `${student.firstName} ${student.lastName}`,
+              usedByAdmissionNo: student.admissionNo
+            }
+          : c
+      )
+    );
+
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.id === student.id
+          ? {
+              ...s,
+              hasActivatedScratchCard: true,
+              activatedScratchCardPin: card.pin
+            }
+          : s
+      )
+    );
+
     await updateDoc(doc(db, 'scratch_cards', card.id), {
       usageCount: newUsage,
-      status: newUsage >= card.maxUsage ? 'Used' : 'Active',
+      status: newStatus,
       usedByStudentId: student.id,
       usedByStudentName: `${student.firstName} ${student.lastName}`,
       usedByAdmissionNo: student.admissionNo
@@ -589,20 +858,25 @@ export function useSchoolData() {
     updateWebsiteCustomization,
     // Admin
     postNews,
+    updateNews,
     deleteNews,
     addStaff,
     updateStaff,
     deleteStaff,
     addClass,
     updateClass,
+    deleteClass,
     addSubject,
+    updateSubject,
+    deleteSubject,
     assignAllSubjectsToAllClasses,
     assignSubjectToTeacher,
     deleteAssignment,
     updateSettings,
     updateNotice,
-    // Teacher
+    // Teacher & Student Management
     enrollStudent,
+    updateStudent,
     deenrollStudent,
     saveStudentScore,
     // Student

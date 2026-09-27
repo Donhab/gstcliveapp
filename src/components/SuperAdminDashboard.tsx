@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { AdminAccount, ScratchCard, WebsiteCustomization } from '../types/school';
+import { useAuth } from '../context/AuthContext';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import {
   ShieldCheck,
   UserPlus,
@@ -15,7 +17,8 @@ import {
   Check,
   Globe,
   Sliders,
-  AlertCircle
+  AlertCircle,
+  Database
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -23,6 +26,8 @@ interface SuperAdminDashboardProps {
   admins: AdminAccount[];
   scratchCards: ScratchCard[];
   customization: WebsiteCustomization | null;
+  syncStatus?: 'connected' | 'syncing' | 'error';
+  lastSyncTime?: Date;
   onAddAdmin: (data: Omit<AdminAccount, 'id' | 'createdAt'>) => Promise<AdminAccount>;
   onRemoveAdmin: (id: string) => Promise<void>;
   onGenerateScratchCards: (count: number) => Promise<ScratchCard[]>;
@@ -33,20 +38,38 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   admins,
   scratchCards,
   customization,
+  syncStatus = 'connected',
+  lastSyncTime,
   onAddAdmin,
   onRemoveAdmin,
   onGenerateScratchCards,
   onUpdateWebsiteCustomization
 }) => {
+  const { userProfile } = useAuth();
+  const isPrincipalSuperAdmin = Boolean(userProfile?.isPrincipalSuperAdmin);
+
+  // Second Super Admin only sees regular admins and never sees Principal Super Admin or other Super Admins
+  const visibleAdmins = isPrincipalSuperAdmin
+    ? admins.filter((a) => !a.isPrincipalSuperAdmin && a.username?.toLowerCase() !== 'admin')
+    : admins.filter(
+        (a) =>
+          !a.isPrincipalSuperAdmin &&
+          a.role !== 'super_admin' &&
+          a.username?.toLowerCase() !== 'admin'
+      );
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState<{ [id: string]: boolean }>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [adminToDelete, setAdminToDelete] = useState<AdminAccount | null>(null);
+  const [adminStatusMsg, setAdminStatusMsg] = useState<string | null>(null);
 
   // Form state for creating new Admin
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newAdminRole, setNewAdminRole] = useState<'admin' | 'super_admin'>('admin');
   const [assignedOffice, setAssignedOffice] = useState('Academic Records & Admissions');
   const [submittingAdmin, setSubmittingAdmin] = useState(false);
 
@@ -63,12 +86,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   );
   const [principalWelcome, setPrincipalWelcome] = useState(
     customization?.principalWelcomeMessage ||
-      'Welcome to Government Science & Technical College Garki. We are committed to practical excellence, technological innovation, and self-reliance.'
+      'Welcome to Government Science & Technical College Garki, Area 3 Abuja. Together with our wonderful team of high-performing administrative and academic staff, we are committed to practical excellence, technological innovation, and self-reliance across all 9 NABTEB-accredited trades.'
   );
   const [schoolEmail, setSchoolEmail] = useState(customization?.schoolContactEmail || 'info@gstcgarki.edu.ng');
   const [schoolPhone, setSchoolPhone] = useState(customization?.schoolPhone || '+234 9 291 0000');
   const [schoolAddress, setSchoolAddress] = useState(
-    customization?.schoolAddress || 'Area 10, Garki, Abuja Federal Capital Territory, Nigeria'
+    customization?.schoolAddress?.replace(/Area\s*10,?\s*/gi, 'Area 3 ') ||
+      'Garki Area 3, Abuja Federal Capital Territory, Nigeria'
   );
   const [bannerNoticeText, setBannerNoticeText] = useState(
     customization?.bannerNoticeText ||
@@ -99,7 +123,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         fullName,
         email: email || `${username.toLowerCase()}@gstcgarki.edu.ng`,
         password: password || 'GarkiAdmin#2026',
-        role: 'admin',
+        role: isPrincipalSuperAdmin ? newAdminRole : 'admin',
+        isPrincipalSuperAdmin: false,
         assignedOffice
       });
       confetti({ particleCount: 40, spread: 60 });
@@ -107,6 +132,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       setFullName('');
       setEmail('');
       setPassword('');
+      setNewAdminRole('admin');
       setShowAddModal(false);
     } catch (err) {
       console.error(err);
@@ -115,11 +141,24 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
   };
 
+  const handleConfirmDeleteAdmin = async () => {
+    if (!adminToDelete) return;
+    setAdminStatusMsg(null);
+    try {
+      await onRemoveAdmin(adminToDelete.id);
+      setAdminStatusMsg(`Administrator "${adminToDelete.fullName}" (@${adminToDelete.username}) has been removed.`);
+      setAdminToDelete(null);
+      setTimeout(() => setAdminStatusMsg(null), 4000);
+    } catch (err) {
+      console.error('Failed to delete admin:', err);
+      setAdminStatusMsg('Failed to delete administrator. Please try again.');
+    }
+  };
+
   const handleGenerateCards = async (e: React.FormEvent) => {
     e.preventDefault();
     const count = parseInt(cardCountInput, 10);
     if (isNaN(count) || count <= 0) {
-      alert('Please enter a valid number of cards to generate (at least 1).');
       return;
     }
     setGeneratingCards(true);
@@ -169,7 +208,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-950 uppercase tracking-widest">
-                  Supreme Super Admin
+                  Super Admin
                 </span>
                 <span className="text-xs text-emerald-200">GSTC Central Management</span>
               </div>
@@ -177,7 +216,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 Super Admin Command Dashboard
               </h2>
               <p className="text-xs text-emerald-100/90 mt-1 max-w-2xl leading-relaxed">
-                Supreme executive authority: Add and delete administrators, view and copy their credentials, generate customized numbers of scratch cards, and edit public website contents.
+                Executive authority: Create and manage administrators, view and copy their credentials, generate customized numbers of scratch cards, and edit public website contents.
               </p>
             </div>
           </div>
@@ -202,7 +241,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </span>
             <Users className="w-4 h-4 text-emerald-700" />
           </div>
-          <div className="text-3xl font-extrabold text-stone-900 mt-2">{admins.length}</div>
+          <div className="text-3xl font-extrabold text-stone-900 mt-2">{visibleAdmins.length}</div>
           <p className="text-[11px] text-stone-400 mt-1">Authorized personnel with portal access</p>
         </div>
 
@@ -231,6 +270,35 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       </div>
 
+      {/* Super Admin Exclusive: Cloud Firestore Real-Time Engine Status */}
+      <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Database className="w-5 h-5 text-emerald-700" />
+            <div>
+              <h3 className="text-xs font-bold text-stone-900">Cloud Firestore Real-Time Engine</h3>
+              <p className="text-[11px] text-stone-500">
+                Super Admin exclusive • Live document listener connection status
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full flex items-center gap-1.5">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                syncStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+              }`}
+            />
+            {syncStatus === 'connected' ? 'Connected Live' : 'Syncing...'}
+          </span>
+        </div>
+        <div className="text-xs text-stone-600 pt-2 border-t border-stone-100 flex justify-between">
+          <span>Last live snapshot sync:</span>
+          <span className="font-mono text-stone-800">
+            {lastSyncTime ? lastSyncTime.toLocaleTimeString() : new Date().toLocaleTimeString()}
+          </span>
+        </div>
+      </div>
+
       {/* SECTION 1: MANAGE & DELETE ADMINS */}
       <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -243,13 +311,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               Super Admin exclusive: Inspect active usernames, credentials, and delete admins from the system.
             </p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-3.5 py-1.5 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 self-start sm:self-auto"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>Create Admin Account</span>
-          </button>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            {adminStatusMsg && (
+              <span className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                {adminStatusMsg}
+              </span>
+            )}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3.5 py-1.5 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-semibold rounded-lg flex items-center gap-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Create Admin Account</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -265,19 +341,26 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {admins.length === 0 ? (
+              {visibleAdmins.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-stone-400">
                     No administrators registered yet. Click &quot;Add New Admin&quot; above.
                   </td>
                 </tr>
               ) : (
-                admins.map((adm) => {
+                visibleAdmins.map((adm) => {
                   const isVisible = visiblePasswords[adm.id];
                   return (
                     <tr key={adm.id} className="hover:bg-emerald-50/30 transition">
                       <td className="py-3.5 px-4 font-bold text-stone-900">
-                        {adm.fullName}
+                        <div className="flex items-center gap-2">
+                          <span>{adm.fullName}</span>
+                          {isPrincipalSuperAdmin && adm.role === 'super_admin' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              Second Super Admin
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4">
                         <span className="font-mono bg-stone-100 px-2 py-0.5 rounded text-stone-800 font-semibold border border-stone-200">
@@ -317,12 +400,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button
-                          onClick={() => {
-                            if (confirm(`Are you sure you want to permanently delete admin "${adm.fullName}" (@${adm.username})?`)) {
-                              onRemoveAdmin(adm.id);
-                            }
-                          }}
-                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-md font-semibold text-xs transition inline-flex items-center gap-1.5 shadow-2xs"
+                          type="button"
+                          onClick={() => setAdminToDelete(adm)}
+                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-md font-semibold text-xs transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-red-600" />
                           <span>Delete Admin</span>
@@ -643,6 +723,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 />
               </div>
 
+              {isPrincipalSuperAdmin && (
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    Platform Access Level
+                  </label>
+                  <select
+                    value={newAdminRole}
+                    onChange={(e: any) => setNewAdminRole(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none bg-white"
+                  >
+                    <option value="admin">Administrator (Operations, Classes, Teachers, Students & News)</option>
+                    <option value="super_admin">Second Super Admin (Can Create Other Admins & Scratch Cards)</option>
+                  </select>
+                </div>
+              )}
+
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
@@ -663,6 +759,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for Deleting an Admin Account */}
+      <ConfirmDeleteModal
+        isOpen={Boolean(adminToDelete)}
+        title="Delete Administrator Account"
+        message={
+          adminToDelete
+            ? `Are you sure you want to permanently remove administrator "${adminToDelete.fullName}" (@${adminToDelete.username})? Their login access will be revoked immediately.`
+            : ''
+        }
+        confirmLabel="Yes, Remove Admin"
+        onConfirm={handleConfirmDeleteAdmin}
+        onCancel={() => setAdminToDelete(null)}
+      />
     </div>
   );
 };

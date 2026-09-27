@@ -19,6 +19,7 @@ export interface UserProfile {
   email: string | null;
   displayName: string;
   role: UserRole;
+  isPrincipalSuperAdmin?: boolean;
   username?: string;
   staffId?: string; // If teacher/staff
   studentAdmissionNo?: string; // If student
@@ -48,6 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        if (parsed.role === 'super_admin' && parsed.username === 'Admin' && parsed.isPrincipalSuperAdmin === undefined) {
+          parsed.isPrincipalSuperAdmin = true;
+        }
         setUserProfile(parsed);
         setLoading(false);
         return;
@@ -71,11 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = (passwordInput || '').trim();
 
-    // 1. Check Super Admin (Username: Admin, Default Password: 0000)
+    // 1. Check Principal Super Admin (Username: Admin, Default Password: 0000)
     if (
       cleanId === 'admin' ||
-      cleanId === 'superadmin' ||
-      cleanId === 'super_admin' ||
       cleanId === 'admin@gstcgarki.edu.ng' ||
       cleanId === 'principal'
     ) {
@@ -90,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (cleanPass && cleanPass !== expectedPass && cleanPass !== '0000' && cleanPass !== 'SuperAdmin#2026') {
-        throw new Error('Incorrect password for Super Admin. Default password is 0000.');
+        throw new Error('Incorrect password for account.');
       }
 
       const profile: UserProfile = {
@@ -98,14 +100,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: 'admin@gstcgarki.edu.ng',
         displayName: 'Principal Super Admin',
         username: 'Admin',
-        role: 'super_admin'
+        role: 'super_admin',
+        isPrincipalSuperAdmin: true
       };
       setUserProfile(profile);
       localStorage.setItem('gstc_active_profile', JSON.stringify(profile));
       return profile;
     }
 
-    // 2. Check Admin in Firestore collection
+    // 1b. Check Second Super Admin built-in credentials (Username: SuperAdmin2 / Admin2, Default Password: 0000)
+    if (
+      cleanId === 'superadmin2' ||
+      cleanId === 'admin2' ||
+      cleanId === 'second_super_admin' ||
+      cleanId === 'superadmin' ||
+      cleanId === 'super_admin' ||
+      cleanId === 'superadmin2@gstcgarki.edu.ng'
+    ) {
+      let expectedPass = '0000';
+      try {
+        const secondSuperDoc = await getDoc(doc(db, 'system_auth', 'second_super_admin'));
+        if (secondSuperDoc.exists() && secondSuperDoc.data()?.password) {
+          expectedPass = secondSuperDoc.data().password;
+        } else {
+          const admin2Doc = await getDoc(doc(db, 'admins', 'admin-super-2'));
+          if (admin2Doc.exists() && admin2Doc.data()?.password) {
+            expectedPass = admin2Doc.data().password;
+          }
+        }
+      } catch (e) {
+        console.warn('Second Super Admin auth check fallback:', e);
+      }
+
+      if (cleanPass && cleanPass !== expectedPass && cleanPass !== '0000') {
+        throw new Error('Incorrect password for Super Admin account.');
+      }
+
+      const profile: UserProfile = {
+        uid: 'admin-super-2',
+        email: 'superadmin2@gstcgarki.edu.ng',
+        displayName: 'Executive Super Admin',
+        username: 'SuperAdmin2',
+        role: 'super_admin',
+        isPrincipalSuperAdmin: false
+      };
+      setUserProfile(profile);
+      localStorage.setItem('gstc_active_profile', JSON.stringify(profile));
+      return profile;
+    }
+
+    // 2. Check Admin or Second Super Admin in Firestore 'admins' collection
     try {
       const adminsSnap = await getDocs(collection(db, 'admins'));
       let foundAdmin: AdminAccount | null = null;
@@ -125,12 +169,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (cleanPass && cleanPass !== validPass && cleanPass !== '0000') {
           throw new Error('Incorrect password for Administrator account.');
         }
+        const isSecondSuper = adminData.role === 'super_admin';
         const profile: UserProfile = {
           uid: adminData.id,
           email: adminData.email,
           displayName: adminData.fullName,
           username: adminData.username,
-          role: 'admin'
+          role: isSecondSuper ? 'super_admin' : 'admin',
+          isPrincipalSuperAdmin: false
         };
         setUserProfile(profile);
         localStorage.setItem('gstc_active_profile', JSON.stringify(profile));
@@ -258,13 +304,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     throw new Error(
-      `No user record located for "${identifier}". For Super Admin, use username "Admin" and password "0000".`
+      `No user record located for "${identifier}". Please verify your Admission Number, Staff ID, or Username.`
     );
   };
 
   /**
    * Change Password for the logged-in user:
-   * Works for Super Admin, Admin, Staff, and Student
+   * Works for Principal Super Admin, Second Super Admin, Admin, Staff, and Student
    */
   const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
     if (!userProfile) {
@@ -277,14 +323,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('New password must be at least 4 characters long.');
     }
 
-    // 1. Super Admin Password Change
-    if (userProfile.role === 'super_admin') {
+    // 1. Principal Super Admin Password Change
+    if (userProfile.role === 'super_admin' && userProfile.isPrincipalSuperAdmin) {
       const superDocRef = doc(db, 'system_auth', 'super_admin');
       const superSnap = await getDoc(superDocRef);
       const existing = superSnap.exists() ? superSnap.data()?.password : '0000';
 
       if (cleanCurrent !== existing && cleanCurrent !== '0000' && cleanCurrent !== 'SuperAdmin#2026') {
-        throw new Error('Current password does not match existing Super Admin password.');
+        throw new Error('Current password does not match existing password.');
       }
 
       await setDoc(
@@ -297,6 +343,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         { merge: true }
       );
+      return true;
+    }
+
+    // 1b. Second Super Admin Password Change
+    if (userProfile.role === 'super_admin' && !userProfile.isPrincipalSuperAdmin) {
+      const secondDocRef = doc(db, 'system_auth', 'second_super_admin');
+      const secondSnap = await getDoc(secondDocRef);
+      const existing = secondSnap.exists() ? secondSnap.data()?.password : '0000';
+
+      if (cleanCurrent !== existing && cleanCurrent !== '0000') {
+        throw new Error('Current password does not match existing Super Admin password.');
+      }
+
+      await setDoc(
+        secondDocRef,
+        {
+          username: userProfile.username || 'SuperAdmin2',
+          password: cleanNew,
+          role: 'super_admin',
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      );
+      if (userProfile.uid) {
+        const adminDocRef = doc(db, 'admins', userProfile.uid);
+        const adminSnap = await getDoc(adminDocRef);
+        if (adminSnap.exists()) {
+          await updateDoc(adminDocRef, {
+            password: cleanNew,
+            updatedAt: Date.now()
+          });
+        }
+      }
       return true;
     }
 

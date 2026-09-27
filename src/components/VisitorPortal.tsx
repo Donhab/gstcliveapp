@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { WebsiteCustomization, SchoolNews } from '../types/school';
 import { SchoolBadge } from './SchoolBadge';
+import { SchoolNewsCard, SchoolNewsDetailModal } from './NewsCardAndModal';
+import { PostSchoolNewsForm } from './PostSchoolNewsForm';
 import {
   Globe,
   Bell,
@@ -19,7 +21,9 @@ import {
   MapPin,
   CheckCircle2,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  Plus,
+  X
 } from 'lucide-react';
 
 interface VisitorPortalProps {
@@ -27,16 +31,23 @@ interface VisitorPortalProps {
   news: SchoolNews[];
   onNavigateToCheckResult?: () => void;
   onOpenAuth?: () => void;
+  onPostNews?: (data: Omit<SchoolNews, 'id' | 'publishedAt'>) => Promise<SchoolNews>;
+  onUpdateNews?: (id: string, updates: Partial<SchoolNews>) => Promise<void>;
+  canManageNews?: boolean;
 }
 
 export const VisitorPortal: React.FC<VisitorPortalProps> = ({
   customization,
   news,
   onNavigateToCheckResult,
-  onOpenAuth
+  onOpenAuth,
+  onPostNews,
+  onUpdateNews,
+  canManageNews = false
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [activeArticle, setActiveArticle] = useState<SchoolNews | null>(null);
+  const [showPostNewsSpace, setShowPostNewsSpace] = useState(false);
 
   // Fallback defaults if customization is loading or unset
   const tagline =
@@ -47,11 +58,12 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
     'Admissions for 2026/2027 Academic Session are currently open. Examination results for First Term now available via online scratch card activation.';
   const principalWelcome =
     customization?.principalWelcomeMessage ||
-    'Welcome to Government Science & Technical College (GSTC) Garki, Abuja. As a premier center for technical education in Nigeria\'s Federal Capital Territory, our mission is to blend rigorous scientific foundation with hands-on industrial skills.';
+    'Welcome to Government Science & Technical College (GSTC) Garki, Area 3 Abuja. As a premier center for technical education in Nigeria\'s Federal Capital Territory, our mission is to blend rigorous scientific foundation with hands-on industrial skills across our 9 accredited trades.';
   const schoolEmail = customization?.schoolContactEmail || 'admissions@gstcgarki.edu.ng';
   const schoolPhone = customization?.schoolPhone || '+234 9 291 0000';
   const schoolAddress =
-    customization?.schoolAddress || 'Area 10, Garki, Abuja Federal Capital Territory, Nigeria';
+    customization?.schoolAddress?.replace(/Area\s*10,?\s*/gi, 'Area 3 ') ||
+    'Garki Area 3, Abuja Federal Capital Territory, Nigeria';
   const bannerNoticeText =
     customization?.bannerNoticeText ||
     'Official Notice: Terminal examination continuous assessment marks are compiled and available through student portal scratch cards.';
@@ -103,12 +115,12 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-3">
-            {onNavigateToCheckResult && (
+            {onOpenAuth && (
               <button
-                onClick={onNavigateToCheckResult}
+                onClick={onOpenAuth}
                 className="px-5 py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs sm:text-sm shadow-md transition flex items-center gap-2 group"
               >
-                <span>Check Student Result</span>
+                <span>Login to Portal</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             )}
@@ -120,15 +132,6 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
               <Newspaper className="w-4 h-4 text-emerald-300" />
               <span>Read Latest News ({news.length})</span>
             </a>
-
-            {onOpenAuth && (
-              <button
-                onClick={onOpenAuth}
-                className="px-4 py-2.5 rounded-lg text-emerald-200 hover:text-white hover:bg-white/5 font-medium text-xs sm:text-sm transition"
-              >
-                Staff & Student Sign In →
-              </button>
-            )}
           </div>
         </div>
       </section>
@@ -138,19 +141,22 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
         <div className="lg:col-span-2 bg-white rounded-xl border border-stone-200 p-6 sm:p-8 shadow-2xs space-y-4">
           <div className="flex items-center gap-2 text-emerald-800 text-xs font-bold uppercase tracking-wider">
             <Award className="w-4 h-4 text-amber-600" />
-            <span>Principal\'s Desk</span>
+            <span>Principal&apos;s Desk</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold font-serif text-stone-900">
-            Welcome to GSTC Garki, Area 10 Abuja
+            Welcome to GSTC Garki, Area 3 Abuja
           </h2>
           <div className="relative pl-4 border-l-2 border-emerald-600 text-stone-700 text-sm leading-relaxed italic">
             "{principalWelcome}"
           </div>
+          <p className="text-xs text-stone-600 leading-relaxed">
+            Led by our great and result-oriented Principal, <strong>Dr. James Musa Kuta</strong>, and a wonderful team of high-performing administrative and academic staff, GSTC Garki empowers students through our outstanding Robotics club with great records, modern workshops, and 9 NABTEB-accredited trades.
+          </p>
           <div className="pt-2 flex items-center gap-3">
             <SchoolBadge size="sm" />
             <div>
-              <p className="text-xs font-bold text-stone-900">Principal & Chief Executive</p>
-              <p className="text-[11px] text-stone-500">Government Science & Technical College, Garki</p>
+              <p className="text-xs font-bold text-stone-900">Dr. James Musa Kuta</p>
+              <p className="text-[11px] text-stone-500">Principal & Chief Executive • Government Science & Technical College, Area 3 Garki</p>
             </div>
           </div>
         </div>
@@ -161,16 +167,20 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
             <span className="text-xs uppercase tracking-wider text-amber-400 font-bold">College Mandate</span>
             <h3 className="text-lg font-bold font-serif mt-1">Knowledge, Skill & Self Reliance</h3>
             <p className="text-stone-300 text-xs mt-2 leading-relaxed">
-              Equipping technical students with vocational mastery for modern industry, digital computing, and higher engineering pursuits.
+              Equipping technical students across 9 accredited trades with vocational mastery for modern industry, robotics, digital computing, and higher engineering pursuits.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stone-800 text-center">
-            <div className="bg-stone-800/80 p-3 rounded-lg border border-stone-700">
-              <span className="text-xl font-black font-mono text-amber-300">100%</span>
-              <p className="text-[10px] text-stone-400 uppercase mt-0.5">Practical Workshops</p>
+          <div className="grid grid-cols-3 gap-2 pt-4 border-t border-stone-800 text-center">
+            <div className="bg-stone-800/80 p-2.5 rounded-lg border border-stone-700">
+              <span className="text-xl font-black font-mono text-amber-400">9</span>
+              <p className="text-[10px] text-stone-400 uppercase mt-0.5">Accredited Trades</p>
             </div>
-            <div className="bg-stone-800/80 p-3 rounded-lg border border-stone-700">
+            <div className="bg-stone-800/80 p-2.5 rounded-lg border border-stone-700">
+              <span className="text-xl font-black font-mono text-amber-300">100%</span>
+              <p className="text-[10px] text-stone-400 uppercase mt-0.5">Practical Labs</p>
+            </div>
+            <div className="bg-stone-800/80 p-2.5 rounded-lg border border-stone-700">
               <span className="text-xl font-black font-mono text-emerald-400">NABTEB</span>
               <p className="text-[10px] text-stone-400 uppercase mt-0.5">Certified Center</p>
             </div>
@@ -179,37 +189,70 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
       </section>
 
       {/* 4. Latest News Section (Posted by Admins for Visitors) */}
-      <section id="school-news" className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200">
+      <section id="school-news" className="space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-200">
           <div>
             <div className="flex items-center gap-2">
               <Newspaper className="w-5 h-5 text-[#0b4d2c]" />
               <h2 className="text-xl font-bold font-serif text-stone-900">
-                School News & Public Announcements
+                School News &amp; Public Announcements
               </h2>
             </div>
             <p className="text-xs text-stone-500 mt-0.5">
-              Verified dispatches, events, and examination timetables published by the School Administration.
+              Verified dispatches, photo galleries, video highlights, events, and examination timetables published by the School Administration.
             </p>
           </div>
 
-          {/* Category Filters */}
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((cat) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {canManageNews && onPostNews && (
               <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                  selectedCategory === cat
-                    ? 'bg-[#0b4d2c] text-white shadow-xs font-semibold'
-                    : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
-                }`}
+                type="button"
+                onClick={() => setShowPostNewsSpace((prev) => !prev)}
+                className="px-3.5 py-1.5 rounded-lg bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
               >
-                {cat}
+                {showPostNewsSpace ? (
+                  <>
+                    <X className="w-3.5 h-3.5" />
+                    <span>Close News Editor</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Post School News</span>
+                  </>
+                )}
               </button>
-            ))}
+            )}
+
+            {/* Category Filters */}
+            <div className="flex flex-wrap gap-1 p-1 bg-stone-100 rounded-lg">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition ${
+                    selectedCategory === cat
+                      ? 'bg-[#0b4d2c] text-white shadow-xs font-semibold'
+                      : 'hover:bg-stone-200 text-stone-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Collapsible Post School News Composer Space */}
+        {showPostNewsSpace && onPostNews && (
+          <div className="animate-in fade-in duration-200">
+            <PostSchoolNewsForm
+              onPostNews={onPostNews}
+              onUpdateNews={onUpdateNews}
+            />
+          </div>
+        )}
 
         {filteredNews.length === 0 ? (
           <div className="bg-white rounded-xl border border-stone-200 p-12 text-center text-stone-500">
@@ -222,46 +265,11 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredNews.map((item) => (
-              <div
+              <SchoolNewsCard
                 key={item.id}
-                onClick={() => setActiveArticle(item)}
-                className="bg-white rounded-xl border border-stone-200 shadow-2xs hover:shadow-md transition-all duration-200 flex flex-col justify-between p-5 cursor-pointer group hover:border-emerald-300"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      {item.category}
-                    </span>
-                    <span className="text-stone-400 text-[11px] flex items-center gap-1 font-mono">
-                      <Calendar className="w-3 h-3 text-stone-400" />
-                      {new Date(item.publishedAt).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric'
-                      })}
-                    </span>
-                  </div>
-
-                  <h3 className="font-bold text-base text-stone-900 group-hover:text-[#0b4d2c] transition-colors leading-snug">
-                    {item.title}
-                  </h3>
-
-                  <p className="text-xs text-stone-600 line-clamp-3 leading-relaxed">
-                    {item.summary || item.content}
-                  </p>
-                </div>
-
-                <div className="pt-4 mt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
-                  <div className="flex items-center gap-1.5 text-[11px] truncate">
-                    <User className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                    <span className="font-medium text-stone-700 truncate">{item.authorName}</span>
-                    <span className="text-stone-400 text-[10px]">({item.authorRole})</span>
-                  </div>
-                  <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px] group-hover:translate-x-1 transition-transform shrink-0">
-                    Read <ChevronRight className="w-3 h-3" />
-                  </span>
-                </div>
-              </div>
+                item={item}
+                onSelect={(article) => setActiveArticle(article)}
+              />
             ))}
           </div>
         )}
@@ -343,61 +351,11 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
         </div>
       </section>
 
-      {/* Article Detail Modal */}
-      {activeArticle && (
-        <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
-                {activeArticle.category}
-              </span>
-              <button
-                onClick={() => setActiveArticle(null)}
-                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 text-sm font-bold transition"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold font-serif text-stone-900 leading-snug">
-                {activeArticle.title}
-              </h2>
-              <div className="flex items-center gap-2 text-xs text-stone-400 mt-2 font-mono">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>
-                  {new Date(activeArticle.publishedAt).toLocaleDateString('en-GB', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
-                </span>
-                <span>•</span>
-                <span>Published by {activeArticle.authorName} ({activeArticle.authorRole})</span>
-              </div>
-            </div>
-
-            {activeArticle.summary && (
-              <p className="text-xs sm:text-sm font-semibold text-stone-700 bg-stone-50 p-3 rounded-lg border-l-4 border-emerald-600">
-                {activeArticle.summary}
-              </p>
-            )}
-
-            <div className="text-stone-700 text-xs sm:text-sm leading-relaxed whitespace-pre-line space-y-2 pt-2">
-              {activeArticle.content}
-            </div>
-
-            <div className="pt-4 border-t border-stone-100 flex justify-end">
-              <button
-                onClick={() => setActiveArticle(null)}
-                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold"
-              >
-                Close Article
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Article Detail Modal with Images & Videos */}
+      <SchoolNewsDetailModal
+        article={activeArticle}
+        onClose={() => setActiveArticle(null)}
+      />
     </div>
   );
 };

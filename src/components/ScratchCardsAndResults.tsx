@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { ScratchCard, Student, ExamResult } from '../types/school';
-import { CreditCard, Sparkles, CheckCircle2, ShieldCheck, Printer, Key, Search, FileText } from 'lucide-react';
+import { CreditCard, Sparkles, CheckCircle2, ShieldCheck, Printer, Key, Search, FileText, Download } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import {
+  buildPrintableReportData,
+  downloadReportCardAsPDF,
+  triggerReportCardPrint
+} from '../utils/reportCardPrinter';
 
 interface ScratchCardsAndResultsProps {
   type: 'cards' | 'results';
@@ -313,7 +318,7 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
                   <h4 className="text-base font-extrabold text-[#0b4d2c] uppercase tracking-wide">
                     Government Science & Technical College Garki
                   </h4>
-                  <p className="text-xs text-stone-600">Area 10, Garki, Abuja FCT • Official Terminal Report</p>
+                  <p className="text-xs text-stone-600">Area 3 Garki, Abuja FCT • Official Terminal Report</p>
                   <span className="inline-block mt-1 px-3 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-full">
                     {foundResult.term} • {foundResult.session}
                   </span>
@@ -385,14 +390,37 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-2">
+                <div className="flex flex-wrap justify-between items-center gap-2 pt-2">
                   <span className="text-[11px] text-stone-400">Authenticated via GSTC Central Firestore</span>
-                  <button
-                    onClick={() => window.print()}
-                    className="px-3.5 py-1.5 bg-stone-800 hover:bg-stone-900 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5" /> Print Official Report
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const std = students.find(
+                          (s) => s.id === foundResult.studentId || s.admissionNo === foundResult.admissionNo
+                        );
+                        const data = buildPrintableReportData(std, foundResult);
+                        downloadReportCardAsPDF(data);
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const std = students.find(
+                          (s) => s.id === foundResult.studentId || s.admissionNo === foundResult.admissionNo
+                        );
+                        const data = buildPrintableReportData(std, foundResult);
+                        downloadReportCardAsPDF(data);
+                        triggerReportCardPrint(data);
+                      }}
+                      className="px-3.5 py-1.5 bg-stone-800 hover:bg-stone-900 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> Print Official Report
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
