@@ -15,6 +15,7 @@ import {
   Laptop
 } from 'lucide-react';
 import { SchoolClass, Subject, Staff, Student, TeachingAssignment, Notice } from '../types/school';
+import { useAuth } from '../context/AuthContext';
 import confetti from 'canvas-confetti';
 
 interface OverviewTabProps {
@@ -46,6 +47,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   onOpenCheckResult,
   onUpdateNotice
 }) => {
+  const { userProfile } = useAuth();
+  const isPrincipalSuperAdmin = Boolean(userProfile?.isPrincipalSuperAdmin);
   const [editingNotice, setEditingNotice] = useState(false);
   const [noticeTitle, setNoticeTitle] = useState(notice?.title || 'GSTC Academic Advisory Notice');
   const [noticeContent, setNoticeContent] = useState(
@@ -260,23 +263,25 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </div>
           </div>
 
-          {/* Action 3: Generate Scratch Cards */}
-          <div
-            onClick={onOpenScratchCardGenerator}
-            className="bg-white rounded-xl border border-stone-200 p-4 shadow-2xs hover:shadow-md hover:border-emerald-300 transition cursor-pointer flex items-center gap-3.5 group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-              <CreditCard className="w-5 h-5" />
+          {/* Action 3: Generate Scratch Cards (Principal Super Admin Only) */}
+          {isPrincipalSuperAdmin && (
+            <div
+              onClick={onOpenScratchCardGenerator}
+              className="bg-white rounded-xl border border-stone-200 p-4 shadow-2xs hover:shadow-md hover:border-emerald-300 transition cursor-pointer flex items-center gap-3.5 group"
+            >
+              <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-stone-800 group-hover:text-emerald-700">
+                  Generate Scratch Cards
+                </h4>
+                <p className="text-[11px] text-stone-500 truncate mt-0.5">
+                  Batch generate 12-digit PINs
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h4 className="text-xs font-bold text-stone-800 group-hover:text-emerald-700">
-                Generate Scratch Cards
-              </h4>
-              <p className="text-[11px] text-stone-500 truncate mt-0.5">
-                Batch generate 12-digit PINs
-              </p>
-            </div>
-          </div>
+          )}
 
           {/* Action 4: Check Student Result */}
           <div

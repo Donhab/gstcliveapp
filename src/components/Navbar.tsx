@@ -45,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       ];
     }
     if (currentRole === 'super_admin') {
+      const isPrincipalSuperAdmin = Boolean(userProfile?.isPrincipalSuperAdmin);
       return [
         { id: 'home', label: 'Home Page', icon: Home },
         { id: 'public_portal', label: 'School News', icon: Newspaper },
@@ -52,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         { id: 'admin_panel', label: 'Admin Operations' },
         { id: 'post_news', label: 'Post School News' },
         { id: 'website_manager', label: 'Website Customization' },
-        { id: 'scratch_cards', label: 'Scratch Cards' },
+        ...(isPrincipalSuperAdmin ? [{ id: 'scratch_cards', label: 'Scratch Cards' }] : []),
         { id: 'students', label: 'Students' },
         { id: 'results', label: 'Broadsheet' }
       ];

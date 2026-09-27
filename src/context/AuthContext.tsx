@@ -49,8 +49,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.role === 'super_admin' && parsed.username === 'Admin' && parsed.isPrincipalSuperAdmin === undefined) {
-          parsed.isPrincipalSuperAdmin = true;
+        if (parsed.role === 'super_admin') {
+          parsed.isPrincipalSuperAdmin =
+            parsed.isPrincipalSuperAdmin === true ||
+            parsed.username?.toLowerCase() === 'admin' ||
+            parsed.uid === 'super-admin-01';
         }
         setUserProfile(parsed);
         setLoading(false);
