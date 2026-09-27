@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScratchCard, Student, ExamResult } from '../types/school';
-import { CreditCard, Sparkles, CheckCircle2, ShieldCheck, Printer, Key, Search, FileText, Download } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { CreditCard, Sparkles, CheckCircle2, ShieldCheck, Printer, Key, Search, FileText, Download, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
   buildPrintableReportData,
@@ -27,6 +28,8 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
   onSaveResult,
   onCheckStudentResultDefault = false
 }) => {
+  const { userProfile } = useAuth();
+  const isPrincipalSuperAdmin = Boolean(userProfile?.isPrincipalSuperAdmin);
   const [generating, setGenerating] = useState(false);
   const [batchCount, setBatchCount] = useState(5);
 
@@ -38,6 +41,7 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
   const [checkerOpen, setCheckerOpen] = useState(onCheckStudentResultDefault);
 
   const handleGenerate = async () => {
+    if (!isPrincipalSuperAdmin) return;
     setGenerating(true);
     try {
       await onGenerateBatch(batchCount);
@@ -110,6 +114,17 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
   };
 
   if (type === 'cards') {
+    if (!isPrincipalSuperAdmin) {
+      return (
+        <div className="bg-white p-8 rounded-xl border border-stone-200 text-center space-y-2">
+          <Lock className="w-8 h-8 text-amber-600 mx-auto" />
+          <h2 className="text-base font-bold text-stone-900">Restricted Access</h2>
+          <p className="text-xs text-stone-500">
+            Only the Principal Super Admin is authorized to view and generate examination scratch cards.
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-stone-200">

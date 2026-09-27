@@ -24,6 +24,7 @@ import { UserRole } from './types/school';
 function SchoolAppContent() {
   const { userProfile } = useAuth();
   const currentRole: UserRole | null = userProfile?.role || null;
+  const isPrincipalSuperAdmin = Boolean(userProfile?.isPrincipalSuperAdmin);
 
   // Set default initial active tab based on role:
   // If not logged in, user lands on modern 'home' page with the 5s sliding pictures
@@ -186,7 +187,12 @@ function SchoolAppContent() {
             lastSyncTime={lastSyncTime}
             onAddAdmin={addAdmin}
             onRemoveAdmin={removeAdmin}
-            onGenerateScratchCards={generateBatchScratchCards}
+            onGenerateScratchCards={async (count) => {
+              if (!isPrincipalSuperAdmin) {
+                throw new Error('Only the Principal Super Admin can generate scratch cards.');
+              }
+              return generateBatchScratchCards(count);
+            }}
             onUpdateWebsiteCustomization={updateWebsiteCustomization}
           />
         )}
@@ -299,9 +305,7 @@ function SchoolAppContent() {
               }
             }}
             onOpenScratchCardGenerator={() => {
-              if (currentRole === 'super_admin') {
-                setActiveTab('super_admin');
-              } else {
+              if (isPrincipalSuperAdmin) {
                 setActiveTab('scratch_cards');
               }
             }}
@@ -397,7 +401,7 @@ function SchoolAppContent() {
           />
         )}
 
-        {activeTab === 'scratch_cards' && (
+        {activeTab === 'scratch_cards' && isPrincipalSuperAdmin && (
           <ScratchCardsAndResults
             type="cards"
             scratchCards={scratchCards}

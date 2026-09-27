@@ -157,6 +157,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const handleGenerateCards = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPrincipalSuperAdmin) return;
     const count = parseInt(cardCountInput, 10);
     if (isNaN(count) || count <= 0) {
       return;
@@ -208,15 +209,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-950 uppercase tracking-widest">
-                  Super Admin
+                  {isPrincipalSuperAdmin ? 'Principal Super Admin' : 'Super Admin'}
                 </span>
                 <span className="text-xs text-emerald-200">GSTC Central Management</span>
               </div>
               <h2 className="text-xl font-bold tracking-tight text-white mt-0.5">
-                Super Admin Command Dashboard
+                {isPrincipalSuperAdmin ? 'Principal Super Admin Command Dashboard' : 'Super Admin Command Dashboard'}
               </h2>
               <p className="text-xs text-emerald-100/90 mt-1 max-w-2xl leading-relaxed">
-                Executive authority: Create and manage administrators, view and copy their credentials, generate customized numbers of scratch cards, and edit public website contents.
+                {isPrincipalSuperAdmin
+                  ? 'Executive authority: Create and manage administrators, view and copy their credentials, generate customized numbers of scratch cards, and edit public website contents.'
+                  : 'Executive authority: Create and manage administrators, view and copy their credentials, and edit public website contents.'}
               </p>
             </div>
           </div>
@@ -233,7 +236,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       </div>
 
       {/* Super Admin Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 ${isPrincipalSuperAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-1'} gap-4`}>
         <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
@@ -245,29 +248,33 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <p className="text-[11px] text-stone-400 mt-1">Authorized personnel with portal access</p>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-              Total Scratch Cards
-            </span>
-            <CreditCard className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="text-3xl font-extrabold text-stone-900 mt-2">{scratchCards.length}</div>
-          <p className="text-[11px] text-stone-400 mt-1">Generated 12-digit result access PINs</p>
-        </div>
+        {isPrincipalSuperAdmin && (
+          <>
+            <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                  Total Scratch Cards
+                </span>
+                <CreditCard className="w-4 h-4 text-amber-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-stone-900 mt-2">{scratchCards.length}</div>
+              <p className="text-[11px] text-stone-400 mt-1">Generated 12-digit result access PINs</p>
+            </div>
 
-        <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-              Active Cards In Circulation
-            </span>
-            <Key className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="text-3xl font-extrabold text-stone-900 mt-2">
-            {scratchCards.filter((c) => c.status === 'Active').length}
-          </div>
-          <p className="text-[11px] text-stone-400 mt-1">Valid for student terminal report cards</p>
-        </div>
+            <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                  Active Cards In Circulation
+                </span>
+                <Key className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-stone-900 mt-2">
+                {scratchCards.filter((c) => c.status === 'Active').length}
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1">Valid for student terminal report cards</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Super Admin Exclusive: Cloud Firestore Real-Time Engine Status */}
@@ -417,95 +424,97 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       </div>
 
-      {/* SECTION 2: CREATE SCRATCH CARDS (With Arbitrary Quantity Space/Input) */}
-      <div className="bg-white rounded-xl border border-stone-200 shadow-2xs p-5 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-100">
-          <div>
-            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-amber-600" />
-              Super Admin Scratch Card Generation Unit
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Specify the exact number of 12-digit scratch cards you wish to generate into the Firestore database.
-            </p>
+      {/* SECTION 2: CREATE SCRATCH CARDS (Principal Super Admin Exclusive) */}
+      {isPrincipalSuperAdmin && (
+        <div className="bg-white rounded-xl border border-stone-200 shadow-2xs p-5 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+            <div>
+              <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-amber-600" />
+                Principal Super Admin Scratch Card Generation Unit
+              </h3>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Specify the exact number of 12-digit scratch cards you wish to generate into the Firestore database.
+              </p>
+            </div>
+
+            {/* Form with SPACE TO INPUT NUMBER OF CARDS */}
+            <form onSubmit={handleGenerateCards} className="flex items-center gap-2 self-start md:self-auto">
+              <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-300 rounded-lg px-2.5 py-1">
+                <label htmlFor="cardCountInput" className="text-xs font-semibold text-stone-600 whitespace-nowrap">
+                  Number of Cards:
+                </label>
+                <input
+                  id="cardCountInput"
+                  type="number"
+                  min="1"
+                  max="200"
+                  value={cardCountInput}
+                  onChange={(e) => setCardCountInput(e.target.value)}
+                  placeholder="e.g. 15"
+                  className="w-16 px-1.5 py-0.5 text-xs font-mono font-bold text-stone-900 bg-white border border-stone-300 rounded focus:ring-1 focus:ring-[#0b4d2c] focus:outline-none text-center"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={generatingCards}
+                className="px-4 py-2 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>{generatingCards ? 'Generating...' : `Generate ${cardCountInput || 0} Cards`}</span>
+              </button>
+            </form>
           </div>
 
-          {/* Form with SPACE TO INPUT NUMBER OF CARDS */}
-          <form onSubmit={handleGenerateCards} className="flex items-center gap-2 self-start md:self-auto">
-            <div className="flex items-center gap-1.5 bg-stone-50 border border-stone-300 rounded-lg px-2.5 py-1">
-              <label htmlFor="cardCountInput" className="text-xs font-semibold text-stone-600 whitespace-nowrap">
-                Number of Cards:
-              </label>
-              <input
-                id="cardCountInput"
-                type="number"
-                min="1"
-                max="200"
-                value={cardCountInput}
-                onChange={(e) => setCardCountInput(e.target.value)}
-                placeholder="e.g. 15"
-                className="w-16 px-1.5 py-0.5 text-xs font-mono font-bold text-stone-900 bg-white border border-stone-300 rounded focus:ring-1 focus:ring-[#0b4d2c] focus:outline-none text-center"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={generatingCards}
-              className="px-4 py-2 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition shrink-0"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>{generatingCards ? 'Generating...' : `Generate ${cardCountInput || 0} Cards`}</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Scratch Cards Grid Display */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pt-1">
-          {scratchCards.slice(0, 8).map((card) => (
-            <div
-              key={card.id}
-              className="bg-stone-900 text-white p-4 rounded-xl border-t-4 border-amber-400 shadow-sm relative group overflow-hidden"
-            >
-              <div className="flex justify-between items-center text-[10px] text-stone-400">
-                <span className="font-mono">{card.serialNumber}</span>
-                <span
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                    card.status === 'Active'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                      : 'bg-stone-800 text-stone-400'
-                  }`}
-                >
-                  {card.status}
-                </span>
-              </div>
-              <div className="my-2.5 text-center">
-                <span className="text-[10px] text-amber-300 uppercase tracking-widest font-bold block">
-                  12-Digit Security PIN
-                </span>
-                <div className="text-sm font-mono font-extrabold tracking-wider text-white mt-1 bg-stone-800 py-1 px-2 rounded border border-stone-700 select-all">
-                  {card.pin}
+          {/* Scratch Cards Grid Display */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pt-1">
+            {scratchCards.slice(0, 8).map((card) => (
+              <div
+                key={card.id}
+                className="bg-stone-900 text-white p-4 rounded-xl border-t-4 border-amber-400 shadow-sm relative group overflow-hidden"
+              >
+                <div className="flex justify-between items-center text-[10px] text-stone-400">
+                  <span className="font-mono">{card.serialNumber}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                      card.status === 'Active'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                        : 'bg-stone-800 text-stone-400'
+                    }`}
+                  >
+                    {card.status}
+                  </span>
+                </div>
+                <div className="my-2.5 text-center">
+                  <span className="text-[10px] text-amber-300 uppercase tracking-widest font-bold block">
+                    12-Digit Security PIN
+                  </span>
+                  <div className="text-sm font-mono font-extrabold tracking-wider text-white mt-1 bg-stone-800 py-1 px-2 rounded border border-stone-700 select-all">
+                    {card.pin}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-[10px] text-stone-400 pt-2 border-t border-stone-800">
+                  <span>Usage: {card.usageCount}/{card.maxUsage}</span>
+                  {card.usedByAdmissionNo ? (
+                    <span className="text-emerald-400 truncate max-w-[110px]">
+                      {card.usedByAdmissionNo}
+                    </span>
+                  ) : (
+                    <span className="text-amber-400/80">Unused</span>
+                  )}
                 </div>
               </div>
-              <div className="flex justify-between items-center text-[10px] text-stone-400 pt-2 border-t border-stone-800">
-                <span>Usage: {card.usageCount}/{card.maxUsage}</span>
-                {card.usedByAdmissionNo ? (
-                  <span className="text-emerald-400 truncate max-w-[110px]">
-                    {card.usedByAdmissionNo}
-                  </span>
-                ) : (
-                  <span className="text-amber-400/80">Unused</span>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          {scratchCards.length > 8 && (
+            <p className="text-center text-xs text-stone-400 pt-1">
+              + {scratchCards.length - 8} more cards stored in Firestore
+            </p>
+          )}
         </div>
-        {scratchCards.length > 8 && (
-          <p className="text-center text-xs text-stone-400 pt-1">
-            + {scratchCards.length - 8} more cards stored in Firestore
-          </p>
-        )}
-      </div>
+      )}
 
       {/* SECTION 3: SUPER ADMIN WEBSITE CUSTOMIZATION (Make changes to the website) */}
       <div className="bg-white rounded-xl border border-stone-200 shadow-2xs p-5 space-y-4">
@@ -734,7 +743,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none bg-white"
                   >
                     <option value="admin">Administrator (Operations, Classes, Teachers, Students & News)</option>
-                    <option value="super_admin">Second Super Admin (Can Create Other Admins & Scratch Cards)</option>
+                    <option value="super_admin">Second Super Admin (Can Create Other Admins & Manage Website)</option>
                   </select>
                 </div>
               )}
