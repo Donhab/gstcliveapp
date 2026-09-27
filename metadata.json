@@ -1,0 +1,6 @@
+{
+  "name": "GSTC Garki School Management",
+  "description": "GSTC Garki Govt. Science & Tech. College School Management System with real-time multi-device Firestore synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
