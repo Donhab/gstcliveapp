@@ -183,22 +183,25 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     <div className="space-y-6">
       {/* Student Portal Header */}
       <div className="bg-[#0b4d2c] text-white p-5 rounded-2xl shadow-sm border border-emerald-800 flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-900 uppercase">
-              Student Portal
-            </span>
-            <span className="text-xs text-emerald-200">
-              Read-Only Official Records
-            </span>
+        <div className="flex items-center gap-3.5">
+          <SchoolBadge size="md" className="shadow-sm" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-900 uppercase">
+                Student Portal
+              </span>
+              <span className="text-xs text-emerald-200">
+                Read-Only Official Records
+              </span>
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-white mt-1">
+              Student Terminal Result & Broadsheet Viewer
+            </h2>
+            <p className="text-xs text-emerald-100 mt-0.5">
+              Welcome, <strong className="text-white">{student ? `${student.firstName} ${student.lastName}` : 'Student'}</strong> ({student?.admissionNo}).
+              Activate an official GSTC 12-digit scratch card to view and print your term report card.
+            </p>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-white mt-1">
-            Student Terminal Result & Broadsheet Viewer
-          </h2>
-          <p className="text-xs text-emerald-100 mt-0.5">
-            Welcome, <strong className="text-white">{student ? `${student.firstName} ${student.lastName}` : 'Student'}</strong> ({student?.admissionNo}).
-            Activate an official GSTC 12-digit scratch card to view and print your term report card.
-          </p>
         </div>
 
         {/* Admission No Badge / Switcher */}

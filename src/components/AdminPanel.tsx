@@ -10,6 +10,8 @@ import {
 } from '../types/school';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { PostSchoolNewsForm } from './PostSchoolNewsForm';
+import { SchoolBadge, SchoolBadgeUploaderCard } from './SchoolBadge';
+import { HeroSliderManagerCard } from './ModernHeroSlider';
 import { getNewsImages, getNewsVideos } from '../utils/newsMediaUtils';
 import {
   GraduationCap,
@@ -33,7 +35,9 @@ import {
   Key,
   Image as ImageIcon,
   Video,
-  ExternalLink
+  ExternalLink,
+  Search,
+  Filter
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -148,6 +152,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [stdGuardianPhone, setStdGuardianPhone] = useState('');
   const [stdPassword, setStdPassword] = useState('0000');
   const [submittingStudent, setSubmittingStudent] = useState(false);
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [studentClassFilter, setStudentClassFilter] = useState('All');
 
   // Login credentials visibility & copy state
   const [visiblePasswords, setVisiblePasswords] = useState<{ [id: string]: boolean }>({});
@@ -425,7 +431,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setStdFirstName('');
     setStdLastName('');
     setStdGender('Male');
-    setStdClassId(classes[0]?.id || '');
+    // Default to currently selected filter class if it's a specific class, otherwise first class
+    const defaultCls =
+      classes.find((c) => c.name === studentClassFilter || c.id === studentClassFilter) ||
+      classes[0];
+    setStdClassId(defaultCls?.id || '');
     setStdGuardianName('');
     setStdGuardianPhone('');
     setStdPassword('0000');
@@ -450,29 +460,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     e.preventDefault();
     setSubmittingStudent(true);
     try {
-      const chosenClass = classes.find((c) => c.id === stdClassId) || classes[0];
+      const chosenClass =
+        classes.find((c) => c.id === stdClassId || c.name === stdClassId) || classes[0];
+      const assignedClassId = chosenClass ? chosenClass.id : (classes[0]?.id || 'class-ccs1');
+      const assignedClassName = chosenClass ? chosenClass.name : (classes[0]?.name || 'CCS 1');
+
       if (editingStudent && onUpdateStudent) {
         await onUpdateStudent(editingStudent.id, {
           firstName: stdFirstName,
           lastName: stdLastName,
           gender: stdGender,
-          classId: chosenClass?.id || editingStudent.classId,
-          className: chosenClass?.name || editingStudent.className,
+          classId: assignedClassId,
+          className: assignedClassName,
           guardianName: stdGuardianName || 'Guardian',
           guardianPhone: stdGuardianPhone || '+234 800 000 0000',
           password: stdPassword.trim() || '0000'
         });
       } else if (onAddStudent) {
-        const admissionIndex = (students.length + 1).toString().padStart(3, '0');
-        const admissionNo = `GSTC/2026/${admissionIndex}`;
+        let maxNum = 0;
+        students.forEach((s) => {
+          const parts = s.admissionNo?.split('/');
+          if (parts && parts.length >= 3) {
+            const num = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        });
+        const nextIdx = Math.max(students.length + 1, maxNum + 1);
+        const admissionNo = `GSTC/2026/${nextIdx.toString().padStart(3, '0')}`;
+
         await onAddStudent({
           admissionNo,
           password: stdPassword.trim() || '0000',
           firstName: stdFirstName,
           lastName: stdLastName,
           gender: stdGender,
-          classId: chosenClass?.id || 'class-ccs1',
-          className: chosenClass?.name || 'CCS 1',
+          classId: assignedClassId,
+          className: assignedClassName,
           term: 'First Term',
           session: '2025/2026',
           guardianName: stdGuardianName || 'Guardian',
@@ -541,16 +564,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     <div className="space-y-6">
       {/* Admin Panel Header Banner */}
       <div className="bg-[#0b4d2c] text-white p-5 rounded-2xl shadow-sm border border-emerald-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-900 uppercase tracking-wider">
-            Admin Panel
-          </span>
-          <h2 className="text-xl font-bold tracking-tight text-white mt-1">
-            Academic Operations &amp; Curriculum Control
-          </h2>
-          <p className="text-xs text-emerald-100 mt-0.5">
-            Add, edit, and remove teachers, classes, subjects, students, subject allocations, and published news posts.
-          </p>
+        <div className="flex items-center gap-3.5">
+          <SchoolBadge size="md" className="shadow-sm" />
+          <div>
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-900 uppercase tracking-wider">
+              Admin Panel
+            </span>
+            <h2 className="text-xl font-bold tracking-tight text-white mt-1">
+              Academic Operations &amp; Curriculum Control
+            </h2>
+            <p className="text-xs text-emerald-100 mt-0.5">
+              Add, edit, and remove teachers, classes, subjects, students, subject allocations, and published news posts.
+            </p>
+          </div>
         </div>
 
         {/* Quick Action Buttons */}
@@ -897,7 +923,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* TAB 4: STUDENTS MANAGEMENT (Add / Edit / Remove) */}
-      {activeSubTab === 'students' && (
+      {activeSubTab === 'students' && (() => {
+        const filteredStudents = students.filter((s) => {
+          const matchesSearch =
+            !studentSearchTerm ||
+            s.firstName.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+            s.lastName.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+            s.admissionNo.toLowerCase().includes(studentSearchTerm.toLowerCase());
+          const matchesClass =
+            studentClassFilter === 'All' ||
+            (s.className && s.className.trim().toLowerCase() === studentClassFilter.trim().toLowerCase()) ||
+            (s.classId && s.classId.trim().toLowerCase() === studentClassFilter.trim().toLowerCase()) ||
+            classes.some(
+              (c) =>
+                c.name.trim().toLowerCase() === studentClassFilter.trim().toLowerCase() &&
+                (c.id === s.classId || (s.className && c.name.toLowerCase() === s.className.trim().toLowerCase()))
+            );
+          return matchesSearch && matchesClass;
+        });
+
+        return (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-stone-200">
             <div>
@@ -919,10 +964,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
               <button
                 onClick={openAddStudentModal}
-                className="px-3.5 py-1.5 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5"
+                className="px-3.5 py-1.5 bg-[#0b4d2c] hover:bg-[#083a21] text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <UserPlus className="w-4 h-4" /> Add Student
               </button>
+            </div>
+          </div>
+
+          {/* Search and Class Filter Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative sm:col-span-2">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={studentSearchTerm}
+                onChange={(e) => setStudentSearchTerm(e.target.value)}
+                placeholder="Search by student name or admission number..."
+                className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none"
+              />
+            </div>
+            <div>
+              <select
+                value={studentClassFilter}
+                onChange={(e) => setStudentClassFilter(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none font-medium"
+              >
+                <option value="All">All Classes ({classes.length})</option>
+                {classes.map((cls) => {
+                  const count = students.filter(
+                    (s) =>
+                      s.classId === cls.id ||
+                      s.className?.trim().toLowerCase() === cls.name.trim().toLowerCase()
+                  ).length;
+                  return (
+                    <option key={cls.id} value={cls.name}>
+                      {cls.name} ({cls.arm}) — {count} student{count !== 1 ? 's' : ''}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
           </div>
 
@@ -941,11 +1021,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {students.map((std) => {
-                    const stdPass = std.password || '0000';
-                    const isPassVisible = showAllStudentPasswords || visiblePasswords[std.id];
-                    return (
-                    <tr key={std.id} className="hover:bg-emerald-50/40 transition">
+                  {filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-stone-400">
+                        No students found matching this class or search term.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStudents.map((std) => {
+                      const stdPass = std.password || '0000';
+                      const isPassVisible = showAllStudentPasswords || visiblePasswords[std.id];
+                      return (
+                      <tr key={std.id} className="hover:bg-emerald-50/40 transition">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono font-bold text-[#0b4d2c]">{std.admissionNo}</span>
@@ -1035,13 +1122,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </td>
                     </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* TAB 5: SUBJECT ALLOCATIONS (Assign a subject to a teacher) */}
       {activeSubTab === 'allocations' && (
@@ -1193,6 +1281,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               Enforce CA marks limits (10 max each) and examination limits (70 max).
             </p>
           </div>
+
+          <SchoolBadgeUploaderCard compact />
+
+          <HeroSliderManagerCard compact />
 
           <form onSubmit={handleSaveSettings} className="space-y-3.5 text-xs">
             <div>

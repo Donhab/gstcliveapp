@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types/school';
 import {
@@ -9,9 +9,12 @@ import {
   Globe,
   KeyRound,
   Home,
-  GraduationCap
+  GraduationCap,
+  Image as ImageIcon,
+  Layers
 } from 'lucide-react';
-import { SchoolBadge } from './SchoolBadge';
+import { SchoolBadge, SchoolBadgeModal } from './SchoolBadge';
+import { HeroSliderManagerModal } from './ModernHeroSlider';
 
 interface NavbarProps {
   activeTab: string;
@@ -34,6 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { userProfile, logout } = useAuth();
   const currentRole: UserRole | null = userProfile?.role || null;
+  const canManageSiteImages = currentRole === 'super_admin' || currentRole === 'admin';
+  const [badgeModalOpen, setBadgeModalOpen] = useState(false);
+  const [sliderModalOpen, setSliderModalOpen] = useState(false);
 
   // Tabs strictly based on authenticated role
   const getTabs = () => {
@@ -151,6 +157,31 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
+          {/* School Badge & Slider Images Quick Uploader Buttons (Strictly Super Admin & Admin Only) */}
+          {canManageSiteImages && (
+            <>
+              <button
+                type="button"
+                onClick={() => setBadgeModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-amber-300 hover:text-white font-semibold rounded-md border border-amber-300/30 transition-colors text-xs cursor-pointer"
+                title="Add or remove the official school badge/logo (Super Admin & Admin only)"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+                <span className="hidden sm:inline">School Badge</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSliderModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-emerald-200 hover:text-white font-semibold rounded-md border border-white/20 transition-colors text-xs cursor-pointer"
+                title="Add or remove homepage 5-second slider images (Super Admin & Admin only)"
+              >
+                <Layers className="w-3.5 h-3.5 text-emerald-300" />
+                <span className="hidden sm:inline">Slider Images</span>
+              </button>
+            </>
+          )}
+
           {/* GitHub / Vercel Readiness Button */}
           <button
             onClick={onOpenDeployGuide}
@@ -229,6 +260,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
       </div>
+
+      {canManageSiteImages && (
+        <>
+          <SchoolBadgeModal
+            isOpen={badgeModalOpen}
+            onClose={() => setBadgeModalOpen(false)}
+          />
+          <HeroSliderManagerModal
+            isOpen={sliderModalOpen}
+            onClose={() => setSliderModalOpen(false)}
+          />
+        </>
+      )}
     </header>
   );
 };

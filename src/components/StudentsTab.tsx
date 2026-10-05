@@ -53,10 +53,19 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
   // Filter students
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
+      !searchTerm ||
       s.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.admissionNo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesClass = selectedClass === 'All' || s.className === selectedClass || s.classId === selectedClass;
+    const matchesClass =
+      selectedClass === 'All' ||
+      (s.className && s.className.trim().toLowerCase() === selectedClass.trim().toLowerCase()) ||
+      (s.classId && s.classId.trim().toLowerCase() === selectedClass.trim().toLowerCase()) ||
+      classes.some(
+        (c) =>
+          c.name.trim().toLowerCase() === selectedClass.trim().toLowerCase() &&
+          (c.id === s.classId || (s.className && c.name.toLowerCase() === s.className.trim().toLowerCase()))
+      );
     return matchesSearch && matchesClass;
   });
 
@@ -65,7 +74,9 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setFirstName('');
     setLastName('');
     setGender('Male');
-    setClassId(classes[0]?.id || '');
+    const defaultCls =
+      classes.find((c) => c.name === selectedClass || c.id === selectedClass) || classes[0];
+    setClassId(defaultCls?.id || '');
     setGuardianName('');
     setGuardianPhone('');
     setPassword('0000');
@@ -88,22 +99,33 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     e.preventDefault();
     setSubmitting(true);
     try {
-      const chosenClass = classes.find((c) => c.id === classId) || classes[0];
+      const chosenClass =
+        classes.find((c) => c.id === classId || c.name === classId) || classes[0];
+      const assignedClassId = chosenClass ? chosenClass.id : (classes[0]?.id || 'class-ccs1');
+      const assignedClassName = chosenClass ? chosenClass.name : (classes[0]?.name || 'CCS 1');
 
       if (editingStudent) {
         await onUpdateStudent(editingStudent.id, {
           firstName,
           lastName,
           gender,
-          classId: chosenClass?.id || editingStudent.classId,
-          className: chosenClass?.name || editingStudent.className,
+          classId: assignedClassId,
+          className: assignedClassName,
           guardianName: guardianName || 'Guardian',
           guardianPhone: guardianPhone || '+234 800 000 0000',
           password: password.trim() || '0000'
         });
       } else {
-        const admissionIndex = (students.length + 1).toString().padStart(3, '0');
-        const admissionNo = `GSTC/2026/${admissionIndex}`;
+        let maxNum = 0;
+        students.forEach((s) => {
+          const parts = s.admissionNo?.split('/');
+          if (parts && parts.length >= 3) {
+            const num = parseInt(parts[parts.length - 1], 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        });
+        const nextIdx = Math.max(students.length + 1, maxNum + 1);
+        const admissionNo = `GSTC/2026/${nextIdx.toString().padStart(3, '0')}`;
 
         await onAddStudent({
           admissionNo,
@@ -111,8 +133,8 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           firstName,
           lastName,
           gender,
-          classId: chosenClass.id,
-          className: chosenClass.name,
+          classId: assignedClassId,
+          className: assignedClassName,
           term: 'First Term',
           session: '2025/2026',
           guardianName: guardianName || 'Guardian',

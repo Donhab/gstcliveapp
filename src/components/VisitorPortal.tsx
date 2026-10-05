@@ -101,9 +101,12 @@ export const VisitorPortal: React.FC<VisitorPortalProps> = ({
         <div className="absolute right-1/4 -bottom-20 w-60 h-60 rounded-full bg-amber-400/10 blur-2xl pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl space-y-5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-medium text-emerald-200">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>FCT Education Secretariat • Science & Tech Board</span>
+          <div className="flex items-center gap-3">
+            <SchoolBadge size="md" className="shadow-md" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-medium text-emerald-200">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>FCT Education Secretariat • Science & Tech Board</span>
+            </div>
           </div>
 
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black font-serif tracking-tight leading-tight text-white">

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AdminAccount, ScratchCard, WebsiteCustomization } from '../types/school';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { SchoolBadge, SchoolBadgeUploaderCard } from './SchoolBadge';
+import { HeroSliderManagerCard } from './ModernHeroSlider';
 import {
   ShieldCheck,
   UserPlus,
@@ -203,9 +205,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       <div className="bg-gradient-to-r from-[#06331c] via-[#0b4d2c] to-[#145a32] text-white p-6 rounded-2xl shadow-sm border border-emerald-900/60 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-amber-400 text-stone-900 flex items-center justify-center font-black shadow-md">
-              <ShieldCheck className="w-7 h-7 text-[#06331c]" />
-            </div>
+            <SchoolBadge size="lg" className="shadow-md" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-950 uppercase tracking-widest">
@@ -476,7 +476,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 className="bg-stone-900 text-white p-4 rounded-xl border-t-4 border-amber-400 shadow-sm relative group overflow-hidden"
               >
                 <div className="flex justify-between items-center text-[10px] text-stone-400">
-                  <span className="font-mono">{card.serialNumber}</span>
+                  <div className="flex items-center gap-1.5">
+                    <SchoolBadge size="xs" />
+                    <span className="font-mono">{card.serialNumber}</span>
+                  </div>
                   <span
                     className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                       card.status === 'Active'
@@ -534,6 +537,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </span>
           )}
         </div>
+
+        <SchoolBadgeUploaderCard />
+
+        <HeroSliderManagerCard />
 
         <form onSubmit={handleSaveWebsiteCustomization} className="space-y-4 text-xs">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
