@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ShieldCheck, UserCheck, Key, Settings, Server, RefreshCw, CheckCircle, Database } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { SchoolBadge, SchoolBadgeUploaderCard } from './SchoolBadge';
+import { HeroSliderManagerCard } from './ModernHeroSlider';
 import confetti from 'canvas-confetti';
 
 interface AdminsAndSettingsProps {
@@ -97,12 +99,19 @@ export const AdminsAndSettings: React.FC<AdminsAndSettingsProps> = ({
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <div className="bg-white p-4 rounded-xl border border-stone-200">
-        <h2 className="text-base font-bold text-stone-900">School & System Configuration</h2>
-        <p className="text-xs text-stone-500">
-          Global academic session settings and term parameters
-        </p>
+      <div className="bg-white p-4 rounded-xl border border-stone-200 flex items-center gap-3">
+        <SchoolBadge size="sm" />
+        <div>
+          <h2 className="text-base font-bold text-stone-900">School & System Configuration</h2>
+          <p className="text-xs text-stone-500">
+            Global academic session settings and term parameters
+          </p>
+        </div>
       </div>
+
+      <SchoolBadgeUploaderCard compact />
+
+      <HeroSliderManagerCard compact />
 
       {/* Cloud Firestore Status card - Restricted to Super Admin only */}
       {userProfile?.role === 'super_admin' && (

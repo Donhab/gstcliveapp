@@ -9,6 +9,7 @@ import {
   SubjectScore
 } from '../types/school';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { SchoolBadge } from './SchoolBadge';
 import {
   GraduationCap,
   UserCheck,
@@ -25,9 +26,40 @@ import {
   EyeOff,
   Copy,
   Check,
-  Key
+  Key,
+  CheckSquare,
+  Square,
+  CheckCheck,
+  RotateCcw,
+  Sparkles,
+  Filter
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+
+export function isStudentInSchoolClass(s: Student, cls: SchoolClass | undefined | null): boolean {
+  if (!s || !cls) return false;
+  // 1. Direct classId match
+  if (s.classId && cls.id && s.classId.trim() === cls.id.trim()) return true;
+  // 2. Direct or normalized className match
+  if (s.className && cls.name) {
+    const normS = s.className.trim().toLowerCase().replace(/\s+/g, ' ');
+    const normC = cls.name.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normS === normC) return true;
+  }
+  // 3. Fallback: if student classId matches class name (e.g. classId: "CCS 1")
+  if (s.classId && cls.name) {
+    const normId = s.classId.trim().toLowerCase().replace(/\s+/g, ' ');
+    const normC = cls.name.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normId === normC) return true;
+  }
+  // 4. Fallback: if student className matches class id (e.g. className: "class-ccs1")
+  if (s.className && cls.id) {
+    const normS = s.className.trim().toLowerCase().replace(/\s+/g, ' ');
+    const normId = cls.id.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normS === normId) return true;
+  }
+  return false;
+}
 
 interface StaffDashboardProps {
   currentStaff: Staff | undefined;
@@ -40,6 +72,8 @@ interface StaffDashboardProps {
   onEnrollStudent: (data: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Student>;
   onUpdateStudent?: (studentId: string, updates: Partial<Student>) => Promise<void>;
   onDeenrollStudent: (studentId: string) => Promise<void>;
+  onEnrollStudentsInSubject?: (studentIds: string[], subjectId: string) => Promise<void>;
+  onUnenrollStudentsFromSubject?: (studentIds: string[], subjectId: string) => Promise<void>;
   onSaveScore: (
     studentId: string,
     subjectId: string,
@@ -64,6 +98,8 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   onEnrollStudent,
   onUpdateStudent,
   onDeenrollStudent,
+  onEnrollStudentsInSubject,
+  onUnenrollStudentsFromSubject,
   onSaveScore
 }) => {
   // Use either the logged in teacher or default to first staff
@@ -87,13 +123,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
       assignments.some((a) => a.teacherId === teacher?.id && a.classId === c.id)
   );
 
-  // Fallback to all classes if none assigned yet
-  const availableClasses = teacherClasses.length > 0 ? teacherClasses : classes;
-
+  // Selected class (defaults to form class or first available class)
   const [selectedClassId, setSelectedClassId] = useState<string>(
-    formTeacherClasses[0]?.id || availableClasses[0]?.id || ''
+    formTeacherClasses[0]?.id || classes[0]?.id || ''
   );
-  const selectedClass = classes.find((c) => c.id === selectedClassId) || availableClasses[0];
+  const selectedClass = classes.find((c) => c.id === selectedClassId) || classes[0];
 
   // Determine subjects taught by this teacher in this class
   const teacherAssignments = assignments.filter((a) => a.teacherId === teacher?.id);
@@ -111,6 +145,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   const [guardianName, setGuardianName] = useState('');
   const [guardianPhone, setGuardianPhone] = useState('');
   const [studentPassword, setStudentPassword] = useState('0000');
+  const [alsoEnrollInCurrentSubject, setAlsoEnrollInCurrentSubject] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
 
   // Password visibility & copy state for Form Teacher viewing student credentials
@@ -120,6 +155,12 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
   const [editingPasswordStudent, setEditingPasswordStudent] = useState<Student | null>(null);
   const [newStudentPassInput, setNewStudentPassInput] = useState('');
   const [savingStudentPass, setSavingStudentPass] = useState(false);
+
+  // Subject enrollment bulk operations state
+  const [bulkEnrolling, setBulkEnrolling] = useState(false);
+  const [bulkSuccessNotice, setBulkSuccessNotice] = useState<string | null>(null);
+  const [togglingOffering, setTogglingOffering] = useState<{ [id: string]: boolean }>({});
+  const [offeringFilter, setOfferingFilter] = useState<'all' | 'offering' | 'not_offering'>('all');
 
   const togglePasswordVisibility = (id: string) => {
     setVisiblePasswords((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -143,10 +184,113 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
     };
   }>({});
 
-  // Filter students enrolled in the teacher's selected class
-  const enrolledStudents = students.filter(
-    (s) => s.classId === selectedClass?.id || s.className === selectedClass?.name
-  );
+  // Filter all students registered in the selected class (robust ID + Name matching)
+  const enrolledStudents = students.filter((s) => isStudentInSchoolClass(s, selectedClass));
+
+  // Determine whether a given student offers the selected subject
+  const isOfferingSubject = (std: Student): boolean => {
+    if (!selectedSubject) return false;
+    if (Array.isArray(std.enrolledSubjectIds)) {
+      return std.enrolledSubjectIds.includes(selectedSubject.id);
+    }
+    // If student has a recorded score in results for this subject, treat as offering
+    const res = results.find((r) => r.studentId === std.id || r.admissionNo === std.admissionNo);
+    const subScore = res?.subjects?.find((s) => s.subjectId === selectedSubject.id);
+    return Boolean(
+      subScore &&
+        (subScore.ca1 > 0 || subScore.ca2 > 0 || subScore.ca3 > 0 || subScore.exam > 0)
+    );
+  };
+
+  const offeringStudents = enrolledStudents.filter((s) => isOfferingSubject(s));
+  const notOfferingStudents = enrolledStudents.filter((s) => !isOfferingSubject(s));
+
+  const displayedStudents =
+    offeringFilter === 'offering'
+      ? offeringStudents
+      : offeringFilter === 'not_offering'
+      ? notOfferingStudents
+      : enrolledStudents;
+
+  // Toggle subject offering for an individual student (tick/untick)
+  const handleToggleOffering = async (std: Student) => {
+    if (!selectedSubject) return;
+    const isCurrentlyOffering = isOfferingSubject(std);
+    setTogglingOffering((prev) => ({ ...prev, [std.id]: true }));
+    try {
+      if (isCurrentlyOffering) {
+        if (onUnenrollStudentsFromSubject) {
+          await onUnenrollStudentsFromSubject([std.id], selectedSubject.id);
+        } else if (onUpdateStudent) {
+          const next = (std.enrolledSubjectIds || []).filter((id) => id !== selectedSubject.id);
+          await onUpdateStudent(std.id, { enrolledSubjectIds: next });
+        }
+      } else {
+        if (onEnrollStudentsInSubject) {
+          await onEnrollStudentsInSubject([std.id], selectedSubject.id);
+        } else if (onUpdateStudent) {
+          const next = Array.from(new Set([...(std.enrolledSubjectIds || []), selectedSubject.id]));
+          await onUpdateStudent(std.id, { enrolledSubjectIds: next });
+        }
+        confetti({ particleCount: 15 });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTogglingOffering((prev) => ({ ...prev, [std.id]: false }));
+    }
+  };
+
+  // Button: Enroll all students at once
+  const handleEnrollAllStudents = async () => {
+    if (!selectedSubject || enrolledStudents.length === 0) return;
+    setBulkEnrolling(true);
+    try {
+      const studentIds = enrolledStudents.map((s) => s.id);
+      if (onEnrollStudentsInSubject) {
+        await onEnrollStudentsInSubject(studentIds, selectedSubject.id);
+      } else if (onUpdateStudent) {
+        for (const std of enrolledStudents) {
+          const next = Array.from(new Set([...(std.enrolledSubjectIds || []), selectedSubject.id]));
+          await onUpdateStudent(std.id, { enrolledSubjectIds: next });
+        }
+      }
+      confetti({ particleCount: 45, spread: 70 });
+      setBulkSuccessNotice(
+        `All ${enrolledStudents.length} students in ${selectedClass?.name} are now enrolled in ${selectedSubject?.name}!`
+      );
+      setTimeout(() => setBulkSuccessNotice(null), 4000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBulkEnrolling(false);
+    }
+  };
+
+  // Button: Deselect / Unenroll all students
+  const handleUnenrollAllStudents = async () => {
+    if (!selectedSubject || enrolledStudents.length === 0) return;
+    setBulkEnrolling(true);
+    try {
+      const studentIds = enrolledStudents.map((s) => s.id);
+      if (onUnenrollStudentsFromSubject) {
+        await onUnenrollStudentsFromSubject(studentIds, selectedSubject.id);
+      } else if (onUpdateStudent) {
+        for (const std of enrolledStudents) {
+          const next = (std.enrolledSubjectIds || []).filter((id) => id !== selectedSubject.id);
+          await onUpdateStudent(std.id, { enrolledSubjectIds: next });
+        }
+      }
+      setBulkSuccessNotice(
+        `All students in ${selectedClass?.name} unselected from ${selectedSubject?.name}.`
+      );
+      setTimeout(() => setBulkSuccessNotice(null), 3000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBulkEnrolling(false);
+    }
+  };
 
   // Initialize scores state from existing results
   const getExistingScore = (studentId: string) => {
@@ -182,6 +326,12 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
         saved: false
       }
     }));
+
+    // If student was not marked as offering yet, automatically mark them as enrolled!
+    const targetStudent = students.find((s) => s.id === studentId);
+    if (targetStudent && !isOfferingSubject(targetStudent)) {
+      handleToggleOffering(targetStudent);
+    }
   };
 
   const handleSaveStudentScore = async (student: Student) => {
@@ -192,6 +342,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
     }));
 
     try {
+      // Ensure student is marked as enrolled in this subject
+      if (!isOfferingSubject(student)) {
+        await handleToggleOffering(student);
+      }
+
       await onSaveScore(
         student.id,
         selectedSubject.id,
@@ -228,23 +383,34 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
     e.preventDefault();
     setEnrolling(true);
     try {
-      const count = students.length + 1;
-      const admissionNo = `GSTC/2026/${count.toString().padStart(3, '0')}`;
+      // Safe admission number generator
+      let maxNum = 0;
+      students.forEach((s) => {
+        const parts = s.admissionNo?.split('/');
+        if (parts && parts.length >= 3) {
+          const num = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      });
+      const nextIdx = Math.max(students.length + 1, maxNum + 1);
+      const admissionNo = `GSTC/2026/${nextIdx.toString().padStart(3, '0')}`;
 
       await onEnrollStudent({
         admissionNo,
         password: studentPassword.trim() || '0000',
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         gender,
         classId: selectedClass.id,
-        className: selectedClass.name,
+        className: selectedClass.name.trim(),
         term: 'First Term',
         session: '2025/2026',
-        guardianName,
-        guardianPhone,
+        guardianName: guardianName.trim(),
+        guardianPhone: guardianPhone.trim(),
         status: 'Active',
-        enrolledByTeacherId: teacher?.id
+        enrolledByTeacherId: teacher?.id,
+        enrolledSubjectIds:
+          alsoEnrollInCurrentSubject && selectedSubject ? [selectedSubject.id] : []
       });
 
       confetti({ particleCount: 40 });
@@ -298,23 +464,26 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
     <div className="space-y-6">
       {/* Teacher Profile Banner */}
       <div className="bg-[#0b4d2c] text-white p-5 rounded-2xl shadow-sm border border-emerald-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-900 uppercase">
-              Staff Portal
-            </span>
-            {isFormTeacherOfCurrentClass && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-700 text-white border border-emerald-500">
-                ★ Form Master: {selectedClass?.name}
+        <div className="flex items-center gap-3.5">
+          <SchoolBadge size="md" className="shadow-sm" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-900 uppercase">
+                Staff Portal
               </span>
-            )}
+              {isFormTeacherOfCurrentClass && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-700 text-white border border-emerald-500">
+                  ★ Form Master: {selectedClass?.name}
+                </span>
+              )}
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-white mt-1">
+              Teacher Gradebook & Class Roster
+            </h2>
+            <p className="text-xs text-emerald-100 mt-0.5">
+              Logged in as <strong className="text-white">{teacher?.fullName}</strong> ({teacher?.staffId}) • Manage enrolled students and record CA1 (10 max), CA2 (10 max), CA3 (10 max), and Exam (70 max).
+            </p>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-white mt-1">
-            Teacher Gradebook & Class Roster
-          </h2>
-          <p className="text-xs text-emerald-100 mt-0.5">
-            Logged in as <strong className="text-white">{teacher?.fullName}</strong> ({teacher?.staffId}) • Manage enrolled students and record CA1 (10 max), CA2 (10 max), CA3 (10 max), and Exam (70 max).
-          </p>
         </div>
 
         <button
@@ -322,7 +491,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
           className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 self-start md:self-auto shrink-0"
         >
           <UserPlus className="w-4 h-4 text-stone-950" />
-          <span>Enroll Student to {selectedClass?.name}</span>
+          <span>Enroll New Student to {selectedClass?.name}</span>
         </button>
       </div>
 
@@ -330,18 +499,23 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
       <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1">
-            1. Select Assigned Class
+            1. Select Class
           </label>
           <select
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
             className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none bg-white font-medium"
           >
-            {availableClasses.map((cls) => (
-              <option key={cls.id} value={cls.id}>
-                {cls.name} ({cls.arm}) — Form Master: {cls.formTeacherName}
-              </option>
-            ))}
+            {classes.map((cls) => {
+              const isAssigned = teacherClasses.some((tc) => tc.id === cls.id);
+              const isForm = formTeacherClasses.some((fc) => fc.id === cls.id);
+              return (
+                <option key={cls.id} value={cls.id}>
+                  {cls.name} ({cls.arm}) — Form Master: {cls.formTeacherName || 'Unassigned'}
+                  {isForm ? ' ★ [Your Form Class]' : isAssigned ? ' • [Assigned]' : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -356,7 +530,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
           >
             {subjects.map((sub) => (
               <option key={sub.id} value={sub.id}>
-                {sub.name} ({sub.code})
+                {sub.name} ({sub.code}) — {sub.category}
               </option>
             ))}
           </select>
@@ -376,7 +550,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
         </span>
       </div>
 
-      {/* Form Teacher Exclusive: Student Login Details (Admission No & Password) Directory */}
+      {/* Form Teacher Exclusive: Student Login Details Directory */}
       {(isFormTeacherOfCurrentClass || formTeacherClasses.length > 0) && (
         <div className="bg-white rounded-xl border border-emerald-200 shadow-2xs overflow-hidden">
           <div className="p-4 bg-emerald-50/70 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -529,42 +703,137 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
         </div>
       )}
 
-      {/* Enrolled Students & Marks Entry Table */}
+      {/* Enrolled Students & Marks Entry Table with Subject Offering Checkboxes */}
       <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
-        <div className="p-4 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* Table Header & Controls Bar */}
+        <div className="p-4 border-b border-stone-200 bg-stone-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-sm font-bold text-stone-900">
-              {selectedClass?.name} Roster • {selectedSubject?.name} Marks
-            </h3>
-            <p className="text-xs text-stone-500">
-              {enrolledStudents.length} students enrolled in this class
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-bold text-stone-900">
+                {selectedClass?.name} Roster • {selectedSubject?.name} Marks
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#0b4d2c] text-white">
+                {offeringStudents.length} of {enrolledStudents.length} Offering Subject
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Tick the box beside each student&apos;s name to select who offers {selectedSubject?.name}. Only enrolled students have continuous assessment scores recorded.
             </p>
           </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {isFormTeacherOfCurrentClass && (
+
+          {/* Action Buttons: Enroll All at Once & Filter Controls */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={bulkEnrolling || enrolledStudents.length === 0}
+              onClick={handleEnrollAllStudents}
+              className="px-3.5 py-2 bg-[#0b4d2c] hover:bg-[#07361e] text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Enroll all students in this class in this subject at once"
+            >
+              <CheckCheck className="w-4 h-4 text-amber-300" />
+              <span>{bulkEnrolling ? 'Enrolling All...' : 'Enroll All Students at Once'}</span>
+            </button>
+
+            {offeringStudents.length > 0 && (
               <button
                 type="button"
-                onClick={() => setShowAllPasswords((prev) => !prev)}
-                className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-[#0b4d2c] text-xs font-semibold rounded-md border border-emerald-200 flex items-center gap-1"
+                disabled={bulkEnrolling}
+                onClick={handleUnenrollAllStudents}
+                className="px-3 py-2 bg-white hover:bg-stone-100 text-stone-700 text-xs font-semibold rounded-lg border border-stone-300 transition flex items-center gap-1 cursor-pointer"
+                title="Deselect all students for this subject"
               >
-                {showAllPasswords ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span>{showAllPasswords ? 'Hide Passwords' : 'Show Student Passwords'}</span>
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Deselect All</span>
               </button>
             )}
+
             <button
               onClick={() => setShowEnrollModal(true)}
-              className="px-3 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold rounded-md border border-stone-300 flex items-center gap-1"
+              className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-bold rounded-lg shadow-xs flex items-center gap-1 transition cursor-pointer"
             >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Enroll Another Student</span>
+              <UserPlus className="w-3.5 h-3.5 text-stone-950" />
+              <span>Add Student</span>
             </button>
           </div>
+        </div>
+
+        {/* Filter Pills and Success Banner */}
+        <div className="px-4 py-2.5 bg-stone-100/70 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-stone-600 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-stone-500" /> View:
+            </span>
+            <button
+              type="button"
+              onClick={() => setOfferingFilter('all')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                offeringFilter === 'all'
+                  ? 'bg-stone-800 text-white shadow-xs'
+                  : 'bg-white text-stone-700 hover:bg-stone-200 border border-stone-200'
+              }`}
+            >
+              All Class Students ({enrolledStudents.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOfferingFilter('offering')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                offeringFilter === 'offering'
+                  ? 'bg-[#0b4d2c] text-white shadow-xs'
+                  : 'bg-white text-stone-700 hover:bg-stone-200 border border-stone-200'
+              }`}
+            >
+              Offering Subject ({offeringStudents.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOfferingFilter('not_offering')}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${
+                offeringFilter === 'not_offering'
+                  ? 'bg-amber-700 text-white shadow-xs'
+                  : 'bg-white text-stone-700 hover:bg-stone-200 border border-stone-200'
+              }`}
+            >
+              Not Offering ({notOfferingStudents.length})
+            </button>
+          </div>
+
+          {bulkSuccessNotice && (
+            <span className="text-emerald-800 font-bold flex items-center gap-1 animate-pulse">
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{bulkSuccessNotice}</span>
+            </span>
+          )}
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-stone-600">
             <thead className="bg-stone-50 border-b border-stone-200 text-stone-700 font-semibold uppercase text-[11px]">
               <tr>
+                <th className="py-3 px-3 w-40">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="master-enroll-checkbox"
+                      checked={
+                        enrolledStudents.length > 0 &&
+                        offeringStudents.length === enrolledStudents.length
+                      }
+                      onChange={() => {
+                        if (offeringStudents.length === enrolledStudents.length) {
+                          handleUnenrollAllStudents();
+                        } else {
+                          handleEnrollAllStudents();
+                        }
+                      }}
+                      className="w-4 h-4 text-[#0b4d2c] rounded border-stone-300 focus:ring-[#0b4d2c] cursor-pointer accent-[#0b4d2c]"
+                      title="Select / Deselect all students in this class"
+                    />
+                    <label htmlFor="master-enroll-checkbox" className="cursor-pointer">
+                      Offers Subject?
+                    </label>
+                  </div>
+                </th>
                 <th className="py-3 px-3">Login ID (Adm No)</th>
                 <th className="py-3 px-3">Student Name</th>
                 {isFormTeacherOfCurrentClass && (
@@ -580,14 +849,34 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {enrolledStudents.length === 0 ? (
+              {displayedStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={isFormTeacherOfCurrentClass ? 10 : 9} className="py-8 text-center text-stone-400">
-                    No students enrolled in {selectedClass?.name} yet. Click &quot;Enroll Student&quot; above to add learners.
+                  <td
+                    colSpan={isFormTeacherOfCurrentClass ? 11 : 10}
+                    className="py-10 text-center text-stone-400 space-y-2"
+                  >
+                    <BookOpen className="w-8 h-8 text-stone-300 mx-auto" />
+                    <p className="font-semibold text-stone-700">
+                      {enrolledStudents.length === 0
+                        ? `No students registered in ${selectedClass?.name} yet.`
+                        : offeringFilter === 'offering'
+                        ? `No students in ${selectedClass?.name} are currently enrolled in ${selectedSubject?.name}. Click "Enroll All Students at Once" above or tick individual students.`
+                        : 'No students matching this filter.'}
+                    </p>
+                    {enrolledStudents.length > 0 && offeringStudents.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleEnrollAllStudents}
+                        className="px-4 py-2 bg-[#0b4d2c] hover:bg-[#07361e] text-white font-bold rounded-lg text-xs"
+                      >
+                        Enroll All {enrolledStudents.length} Students in {selectedSubject?.name} Now
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
-                enrolledStudents.map((std) => {
+                displayedStudents.map((std) => {
+                  const isOffering = isOfferingSubject(std);
                   const score = getExistingScore(std.id);
                   const total = score.ca1 + score.ca2 + score.ca3 + score.exam;
                   const stdPass = std.password || '0000';
@@ -601,14 +890,68 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                   else if (total >= 40) grade = 'E';
 
                   return (
-                    <tr key={std.id} className="hover:bg-stone-50/70 transition">
+                    <tr
+                      key={std.id}
+                      className={`transition ${
+                        isOffering
+                          ? 'hover:bg-emerald-50/40 bg-white'
+                          : 'bg-stone-50/40 opacity-75 hover:opacity-100 hover:bg-stone-100/60'
+                      }`}
+                    >
+                      {/* Column 1: Box beside Student Name to Tick / Select Offering */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`offering-${std.id}`}
+                            checked={isOffering}
+                            disabled={togglingOffering[std.id]}
+                            onChange={() => handleToggleOffering(std)}
+                            className="w-4.5 h-4.5 text-[#0b4d2c] rounded border-stone-300 focus:ring-[#0b4d2c] cursor-pointer accent-[#0b4d2c]"
+                            title={
+                              isOffering
+                                ? `Enrolled in ${selectedSubject?.name}. Click to untick.`
+                                : `Click to tick and enroll in ${selectedSubject?.name}.`
+                            }
+                          />
+                          <label
+                            htmlFor={`offering-${std.id}`}
+                            className="cursor-pointer select-none"
+                          >
+                            {isOffering ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                <Check className="w-3 h-3 text-emerald-700" />
+                                <span>Offering</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-100 text-stone-500 border border-stone-200 hover:bg-emerald-50 hover:text-emerald-800 transition">
+                                <span>Tick to enroll</span>
+                              </span>
+                            )}
+                          </label>
+                        </div>
+                      </td>
+
                       <td className="py-3 px-3 font-mono font-bold text-[#0b4d2c]">
                         {std.admissionNo}
                       </td>
+
                       <td className="py-3 px-3 font-medium text-stone-900">
-                        {std.firstName} {std.lastName}
-                        <span className="block text-[10px] text-stone-400">{std.gender}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span>
+                            {std.firstName} {std.lastName}
+                          </span>
+                          <span className="text-[10px] text-stone-400 font-normal">
+                            ({std.gender})
+                          </span>
+                        </div>
+                        {!isOffering && (
+                          <span className="text-[10px] text-amber-700 block font-normal">
+                            Not offering {selectedSubject?.code} • Tick box to enroll
+                          </span>
+                        )}
                       </td>
+
                       {isFormTeacherOfCurrentClass && (
                         <td className="py-3 px-3">
                           <div className="flex items-center gap-1">
@@ -621,7 +964,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                               className="text-stone-400 hover:text-stone-700 p-0.5"
                               title={isPassVisible ? 'Hide Password' : 'Show Password'}
                             >
-                              {isPassVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              {isPassVisible ? (
+                                <EyeOff className="w-3.5 h-3.5" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
                             </button>
                             <button
                               type="button"
@@ -647,7 +994,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                           max="10"
                           value={score.ca1}
                           onChange={(e) => handleScoreChange(std.id, 'ca1', e.target.value)}
-                          className="w-14 text-center px-1 py-1 font-mono font-semibold border border-stone-300 rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none"
+                          className={`w-14 text-center px-1 py-1 font-mono font-semibold border rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none ${
+                            isOffering
+                              ? 'border-stone-300 bg-white'
+                              : 'border-stone-200 bg-stone-100 text-stone-500'
+                          }`}
                         />
                       </td>
 
@@ -659,7 +1010,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                           max="10"
                           value={score.ca2}
                           onChange={(e) => handleScoreChange(std.id, 'ca2', e.target.value)}
-                          className="w-14 text-center px-1 py-1 font-mono font-semibold border border-stone-300 rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none"
+                          className={`w-14 text-center px-1 py-1 font-mono font-semibold border rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none ${
+                            isOffering
+                              ? 'border-stone-300 bg-white'
+                              : 'border-stone-200 bg-stone-100 text-stone-500'
+                          }`}
                         />
                       </td>
 
@@ -671,7 +1026,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                           max="10"
                           value={score.ca3}
                           onChange={(e) => handleScoreChange(std.id, 'ca3', e.target.value)}
-                          className="w-14 text-center px-1 py-1 font-mono font-semibold border border-stone-300 rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none"
+                          className={`w-14 text-center px-1 py-1 font-mono font-semibold border rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none ${
+                            isOffering
+                              ? 'border-stone-300 bg-white'
+                              : 'border-stone-200 bg-stone-100 text-stone-500'
+                          }`}
                         />
                       </td>
 
@@ -683,7 +1042,11 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                           max="70"
                           value={score.exam}
                           onChange={(e) => handleScoreChange(std.id, 'exam', e.target.value)}
-                          className="w-16 text-center px-1 py-1 font-mono font-bold text-stone-900 border border-stone-300 rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none bg-stone-50"
+                          className={`w-16 text-center px-1 py-1 font-mono font-bold border rounded focus:ring-2 focus:ring-[#0b4d2c] focus:outline-none ${
+                            isOffering
+                              ? 'border-stone-300 bg-stone-50 text-stone-900'
+                              : 'border-stone-200 bg-stone-100 text-stone-500'
+                          }`}
                         />
                       </td>
 
@@ -717,8 +1080,15 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                           className={`px-2.5 py-1 text-xs font-semibold rounded-md shadow-2xs transition ${
                             score.saved
                               ? 'bg-emerald-600 text-white'
-                              : 'bg-[#0b4d2c] hover:bg-[#083a21] text-white'
+                              : isOffering
+                              ? 'bg-[#0b4d2c] hover:bg-[#083a21] text-white cursor-pointer'
+                              : 'bg-stone-200 hover:bg-[#0b4d2c] text-stone-700 hover:text-white cursor-pointer'
                           }`}
+                          title={
+                            isOffering
+                              ? 'Save score to Firestore'
+                              : 'Tick box & save score for student'
+                          }
                         >
                           {score.saving ? 'Saving...' : score.saved ? 'Saved ✓' : 'Save Score'}
                         </button>
@@ -726,7 +1096,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                           type="button"
                           onClick={() => setStudentToDeenroll(std)}
                           className="px-2 py-1 text-stone-400 hover:text-red-600 rounded cursor-pointer"
-                          title="De-enroll student"
+                          title="De-enroll student from class"
                         >
                           <UserMinus className="w-3.5 h-3.5 inline" />
                         </button>
@@ -749,7 +1119,12 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                 <UserPlus className="w-4 h-4 text-emerald-700" />
                 Enroll Student into {selectedClass?.name}
               </h3>
-              <button onClick={() => setShowEnrollModal(false)} className="text-stone-400 hover:text-stone-600">✕</button>
+              <button
+                onClick={() => setShowEnrollModal(false)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleEnrollSubmit} className="space-y-3 mt-4">
@@ -790,6 +1165,16 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                 </select>
               </div>
 
+              <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-200 text-xs">
+                <span className="text-stone-600">Assigned Class: </span>
+                <strong className="text-emerald-950 font-bold">
+                  {selectedClass?.name} ({selectedClass?.arm})
+                </strong>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  The student will immediately appear in the {selectedClass?.name} student list.
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Guardian Name</label>
@@ -827,8 +1212,29 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({
                 />
               </div>
 
+              {selectedSubject && (
+                <div className="flex items-center gap-2 p-2 bg-stone-50 rounded-lg border border-stone-200">
+                  <input
+                    type="checkbox"
+                    id="modal-also-enroll"
+                    checked={alsoEnrollInCurrentSubject}
+                    onChange={(e) => setAlsoEnrollInCurrentSubject(e.target.checked)}
+                    className="w-4 h-4 text-[#0b4d2c] rounded border-stone-300 focus:ring-[#0b4d2c] cursor-pointer"
+                  />
+                  <label htmlFor="modal-also-enroll" className="cursor-pointer font-medium text-stone-700">
+                    Also enroll in {selectedSubject.name} ({selectedSubject.code})
+                  </label>
+                </div>
+              )}
+
               <div className="pt-2 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowEnrollModal(false)} className="px-3 py-1.5 text-stone-600">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => setShowEnrollModal(false)}
+                  className="px-3 py-1.5 text-stone-600"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
                   disabled={enrolling}

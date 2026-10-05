@@ -27,6 +27,7 @@ import {
   WebsiteCustomization
 } from '../types/school';
 import { seedInitialSchoolDataIfNeeded } from '../services/seedData';
+import { setGlobalSchoolBadgeUrl } from '../components/SchoolBadge';
 
 export function useSchoolData() {
   const [admins, setAdmins] = useState<AdminAccount[]>([]);
@@ -77,7 +78,8 @@ export function useSchoolData() {
           list.push({
             ...data,
             id: d.id,
-            password: data.password || '0000'
+            password: data.password || '0000',
+            enrolledSubjectIds: Array.isArray(data.enrolledSubjectIds) ? data.enrolledSubjectIds : []
           });
         });
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -181,6 +183,9 @@ export function useSchoolData() {
       (snap) => {
         if (snap.exists()) {
           const data = snap.data() as SchoolSettings;
+          if (data.schoolBadgeUrl) {
+            setGlobalSchoolBadgeUrl(data.schoolBadgeUrl, false);
+          }
           setSettings({
             ...data,
             address: data.address
@@ -264,6 +269,9 @@ export function useSchoolData() {
       (snap) => {
         if (snap.exists()) {
           const data = snap.data() as WebsiteCustomization;
+          if (data.schoolBadgeUrl) {
+            setGlobalSchoolBadgeUrl(data.schoolBadgeUrl, false);
+          }
           setCustomization({
             ...data,
             schoolAddress: data.schoolAddress
@@ -652,6 +660,7 @@ export function useSchoolData() {
     const student: Student = {
       ...studentData,
       password: studentData.password || '0000',
+      enrolledSubjectIds: studentData.enrolledSubjectIds || [],
       id: newDocRef.id,
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -674,6 +683,67 @@ export function useSchoolData() {
   const deenrollStudent = async (studentId: string) => {
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
     await deleteDoc(doc(db, 'students', studentId));
+  };
+
+  const enrollStudentsInSubject = async (studentIds: string[], subjectId: string) => {
+    if (!studentIds.length || !subjectId) return;
+    const batch = writeBatch(db);
+    const now = Date.now();
+    setStudents((prev) =>
+      prev.map((s) => {
+        if (studentIds.includes(s.id)) {
+          const current = s.enrolledSubjectIds || [];
+          if (!current.includes(subjectId)) {
+            const next = [...current, subjectId];
+            batch.update(doc(db, 'students', s.id), {
+              enrolledSubjectIds: next,
+              updatedAt: now
+            });
+            return { ...s, enrolledSubjectIds: next, updatedAt: now };
+          }
+        }
+        return s;
+      })
+    );
+    await batch.commit();
+  };
+
+  const unenrollStudentsFromSubject = async (studentIds: string[], subjectId: string) => {
+    if (!studentIds.length || !subjectId) return;
+    const batch = writeBatch(db);
+    const now = Date.now();
+    setStudents((prev) =>
+      prev.map((s) => {
+        if (studentIds.includes(s.id)) {
+          const current = s.enrolledSubjectIds || [];
+          const next = current.filter((id) => id !== subjectId);
+          batch.update(doc(db, 'students', s.id), {
+            enrolledSubjectIds: next,
+            updatedAt: now
+          });
+          return { ...s, enrolledSubjectIds: next, updatedAt: now };
+        }
+        return s;
+      })
+    );
+
+    // Also remove from existing results broadsheet if present
+    for (const studentId of studentIds) {
+      const existingResult = results.find((r) => r.studentId === studentId);
+      if (existingResult && existingResult.subjects.some((s) => s.subjectId === subjectId)) {
+        const remaining = existingResult.subjects.filter((s) => s.subjectId !== subjectId);
+        const totalScore = remaining.reduce((acc, s) => acc + s.total, 0);
+        const averageScore = remaining.length > 0 ? Math.round((totalScore / remaining.length) * 10) / 10 : 0;
+        batch.update(doc(db, 'results', existingResult.id), {
+          subjects: remaining,
+          totalScore,
+          averageScore,
+          updatedAt: now
+        });
+      }
+    }
+
+    await batch.commit();
   };
 
   const saveStudentScore = async (
@@ -714,6 +784,18 @@ export function useSchoolData() {
 
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
+
+    // Automatically ensure student is marked as offering/enrolled in this subject
+    if (!student.enrolledSubjectIds?.includes(subjectId)) {
+      const nextSubjects = [...(student.enrolledSubjectIds || []), subjectId];
+      await updateDoc(doc(db, 'students', student.id), {
+        enrolledSubjectIds: nextSubjects,
+        updatedAt: Date.now()
+      });
+      setStudents((prev) =>
+        prev.map((s) => (s.id === student.id ? { ...s, enrolledSubjectIds: nextSubjects } : s))
+      );
+    }
 
     const existingResult = results.find((r) => r.studentId === studentId);
     const scoreItem: SubjectScore = {
@@ -878,6 +960,8 @@ export function useSchoolData() {
     enrollStudent,
     updateStudent,
     deenrollStudent,
+    enrollStudentsInSubject,
+    unenrollStudentsFromSubject,
     saveStudentScore,
     // Student
     activateScratchCardForStudent

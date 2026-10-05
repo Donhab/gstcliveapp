@@ -27,6 +27,7 @@ export interface Student {
   guardianPhone?: string;
   status: 'Active' | 'Transferred' | 'Graduated';
   enrolledByTeacherId?: string;
+  enrolledSubjectIds?: string[]; // IDs of subjects this student offers/takes
   activatedScratchCardPin?: string;
   hasActivatedScratchCard?: boolean;
   createdAt: number;
@@ -174,6 +175,7 @@ export interface WebsiteCustomization {
   bannerNoticeText: string;
   bannerNoticeActive: boolean;
   primaryAccentColor: string;
+  schoolBadgeUrl?: string;
   updatedAt: number;
   updatedBy: string;
 }
@@ -184,6 +186,7 @@ export interface SchoolSettings {
   address: string;
   session: string;
   term: string;
+  schoolBadgeUrl?: string;
   ca1Max: number; // 10
   ca2Max: number; // 10
   ca3Max: number; // 10

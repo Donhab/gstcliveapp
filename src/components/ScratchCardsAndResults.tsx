@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ScratchCard, Student, ExamResult } from '../types/school';
 import { useAuth } from '../context/AuthContext';
+import { SchoolBadge } from './SchoolBadge';
 import { CreditCard, Sparkles, CheckCircle2, ShieldCheck, Printer, Key, Search, FileText, Download, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -166,7 +167,10 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
               className="bg-stone-900 text-white p-4 rounded-xl shadow-md border-t-4 border-amber-400 relative overflow-hidden"
             >
               <div className="flex justify-between items-center text-[10px] text-stone-400">
-                <span className="font-mono">{card.serialNumber}</span>
+                <div className="flex items-center gap-1.5">
+                  <SchoolBadge size="xs" />
+                  <span className="font-mono">{card.serialNumber}</span>
+                </div>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-semibold">
                   {card.status}
                 </span>
@@ -266,10 +270,8 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-stone-200">
             <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#0b4d2c] text-white flex items-center justify-center font-bold text-xs">
-                  GSTC
-                </div>
+              <div className="flex items-center gap-2.5">
+                <SchoolBadge size="sm" />
                 <div>
                   <h3 className="font-bold text-base text-stone-900">Student Result Verification</h3>
                   <p className="text-[11px] text-stone-500">Government Science & Technical College Garki</p>
@@ -330,6 +332,9 @@ export const ScratchCardsAndResults: React.FC<ScratchCardsAndResultsProps> = ({
               <div className="p-5 border-2 border-stone-300 rounded-xl bg-white space-y-4">
                 {/* Official Letterhead */}
                 <div className="text-center border-b pb-3 border-stone-200">
+                  <div className="flex justify-center mb-1.5">
+                    <SchoolBadge size="md" />
+                  </div>
                   <h4 className="text-base font-extrabold text-[#0b4d2c] uppercase tracking-wide">
                     Government Science & Technical College Garki
                   </h4>

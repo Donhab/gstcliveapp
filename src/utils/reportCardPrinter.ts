@@ -1,4 +1,5 @@
 import { ExamResult, Student } from '../types/school';
+import { getActiveSchoolBadgeUrl, getPreloadedBadgeImage } from '../components/SchoolBadge';
 
 export interface PrintableReportData {
   studentName: string;
@@ -100,26 +101,53 @@ export function renderReportCardToCanvas(data: PrintableReportData): HTMLCanvasE
   ctx.lineWidth = 2;
   ctx.strokeRect(46, 46, width - 92, height - 92);
 
-  // Header Crest Circle
+  // Header Crest / Official School Badge Circle
   const centerX = width / 2;
-  ctx.fillStyle = '#0b4d2c';
-  ctx.beginPath();
-  ctx.arc(centerX, 118, 42, 0, Math.PI * 2);
-  ctx.fill();
+  const badgeImg = getPreloadedBadgeImage();
+  if (badgeImg && badgeImg.complete && badgeImg.naturalWidth > 0) {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(centerX, 114, 46, 0, Math.PI * 2);
+    ctx.fill();
 
-  ctx.strokeStyle = '#fbbf24';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(centerX, 118, 38, 0, Math.PI * 2);
-  ctx.stroke();
+    ctx.strokeStyle = '#0b4d2c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(centerX, 114, 46, 0, Math.PI * 2);
+    ctx.stroke();
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 20px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('GSTC', centerX, 116);
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = 'bold 11px sans-serif';
-  ctx.fillText('GARKI', centerX, 132);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(centerX, 114, 42, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(centerX, 114, 40, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(badgeImg, centerX - 40, 114 - 40, 80, 80);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#0b4d2c';
+    ctx.beginPath();
+    ctx.arc(centerX, 118, 42, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(centerX, 118, 38, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GSTC', centerX, 116);
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('GARKI', centerX, 132);
+  }
 
   // School Name & Address
   ctx.fillStyle = '#0b4d2c';
@@ -607,6 +635,7 @@ export function triggerReportCardPrint(data: PrintableReportData): void {
 <body>
   <div class="sheet">
     <div class="header">
+      <img src="${getActiveSchoolBadgeUrl()}" alt="GSTC Garki School Badge" style="width:68px;height:68px;object-fit:contain;border-radius:50%;border:2px solid #0b4d2c;background:#fff;padding:2px;margin:0 auto 6px;display:block;" />
       <div class="title">Government Science &amp; Technical College, Garki</div>
       <div class="subtitle">Area 3 Garki, Abuja FCT • Motto: Knowledge, Skill, and Self Reliance</div>
       <span class="badge">OFFICIAL CONTINUOUS ASSESSMENT &amp; EXAMINATION REPORT SHEET</span>

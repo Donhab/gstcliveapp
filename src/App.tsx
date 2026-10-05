@@ -98,6 +98,8 @@ function SchoolAppContent() {
     enrollStudent,
     updateStudent,
     deenrollStudent,
+    enrollStudentsInSubject,
+    unenrollStudentsFromSubject,
     saveStudentScore,
     activateScratchCardForStudent
   } = useSchoolData();
@@ -263,6 +265,8 @@ function SchoolAppContent() {
             onEnrollStudent={enrollStudent}
             onUpdateStudent={updateStudent}
             onDeenrollStudent={deenrollStudent}
+            onEnrollStudentsInSubject={enrollStudentsInSubject}
+            onUnenrollStudentsFromSubject={unenrollStudentsFromSubject}
             onSaveScore={saveStudentScore}
           />
         )}
